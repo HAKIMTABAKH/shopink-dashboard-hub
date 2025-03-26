@@ -6,8 +6,29 @@ import { PlusCircle, Search, Filter, SlidersHorizontal } from "lucide-react";
 import ProductCard from "@/components/products/ProductCard";
 import ProductFilters from "@/components/products/ProductFilters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
-const productsData = [
+// Define product type with specific status values
+type ProductStatus = "In Stock" | "Low Stock" | "Out of Stock";
+
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  image: string;
+  status: ProductStatus;
+}
+
+const productsData: Product[] = [
   {
     id: "1",
     name: "Nike Air Max 270",
@@ -64,16 +85,72 @@ const productsData = [
   },
 ];
 
+// Schema for form validation
+const productSchema = z.object({
+  name: z.string().min(3, { message: "Product name must be at least 3 characters" }),
+  category: z.string().min(1, { message: "Please select a category" }),
+  price: z.coerce.number().positive({ message: "Price must be positive" }),
+  stock: z.coerce.number().nonnegative({ message: "Stock must be 0 or positive" }),
+  description: z.string().optional(),
+  image: z.string().url({ message: "Please enter a valid URL" }),
+});
+
+type ProductFormValues = z.infer<typeof productSchema>;
+
 const ProductsPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [products, setProducts] = useState<Product[]>(productsData);
+  const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const { toast } = useToast();
+  
+  const form = useForm<ProductFormValues>({
+    resolver: zodResolver(productSchema),
+    defaultValues: {
+      name: "",
+      category: "",
+      price: 0,
+      stock: 0,
+      description: "",
+      image: "",
+    },
+  });
   
   const toggleFilters = () => setShowFilters(!showFilters);
   
-  const filteredProducts = productsData.filter(product => 
+  const filteredProducts = products.filter(product => 
     product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     product.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  
+  const handleAddProduct = (data: ProductFormValues) => {
+    // Determine status based on stock level
+    let status: ProductStatus = "In Stock";
+    if (data.stock === 0) {
+      status = "Out of Stock";
+    } else if (data.stock <= 5) {
+      status = "Low Stock";
+    }
+    
+    const newProduct: Product = {
+      id: (products.length + 1).toString(),
+      name: data.name,
+      category: data.category,
+      price: data.price,
+      stock: data.stock,
+      image: data.image,
+      status: status,
+    };
+    
+    setProducts([...products, newProduct]);
+    setIsAddProductOpen(false);
+    form.reset();
+    
+    toast({
+      title: "Product added",
+      description: `${data.name} has been added to your inventory.`,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -96,10 +173,127 @@ const ProductsPage = () => {
             <SlidersHorizontal className="h-4 w-4" />
             Filters
           </Button>
-          <Button className="bg-shopink-500 hover:bg-shopink-600">
-            <PlusCircle className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
+          <Dialog open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-shopink-500 hover:bg-shopink-600">
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[550px]">
+              <DialogHeader>
+                <DialogTitle>Add New Product</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleAddProduct)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter product name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Category</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="Footwear">Footwear</SelectItem>
+                              <SelectItem value="Apparel">Apparel</SelectItem>
+                              <SelectItem value="Electronics">Electronics</SelectItem>
+                              <SelectItem value="Accessories">Accessories</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Price</FormLabel>
+                          <FormControl>
+                            <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <FormField
+                    control={form.control}
+                    name="stock"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Stock Quantity</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="1" placeholder="0" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="image"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Image URL</FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Product description..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAddProductOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-shopink-500 hover:bg-shopink-600">
+                      Add Product
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       

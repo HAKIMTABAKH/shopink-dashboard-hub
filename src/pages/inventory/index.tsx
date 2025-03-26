@@ -26,122 +26,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const productsData = [
-  {
-    id: "P001",
-    name: "Nike Air Max 270",
-    sku: "NKE-AM270-BLK-42",
-    category: "Footwear",
-    stock: 28,
-    stockStatus: "In Stock",
-    reorderLevel: 10,
-    supplier: "Nike, Inc.",
-    lastRestocked: "Jun 05, 2023",
-  },
-  {
-    id: "P002",
-    name: "Adidas Ultraboost 22",
-    sku: "ADS-UB22-WHT-41",
-    category: "Footwear",
-    stock: 15,
-    stockStatus: "In Stock",
-    reorderLevel: 12,
-    supplier: "Adidas AG",
-    lastRestocked: "Jun 02, 2023",
-  },
-  {
-    id: "P003",
-    name: "Puma RS-X Toys",
-    sku: "PMA-RSX-RED-43",
-    category: "Footwear",
-    stock: 5,
-    stockStatus: "Low Stock",
-    reorderLevel: 8,
-    supplier: "Puma SE",
-    lastRestocked: "May 20, 2023",
-  },
-  {
-    id: "P004",
-    name: "Levi's 501 Original Fit Jeans",
-    sku: "LVS-501-BLU-34",
-    category: "Apparel",
-    stock: 42,
-    stockStatus: "In Stock",
-    reorderLevel: 15,
-    supplier: "Levi Strauss & Co.",
-    lastRestocked: "Jun 10, 2023",
-  },
-  {
-    id: "P005",
-    name: "H&M Cotton T-shirt",
-    sku: "HNM-CTN-BLK-M",
-    category: "Apparel",
-    stock: 68,
-    stockStatus: "In Stock",
-    reorderLevel: 20,
-    supplier: "H&M Group",
-    lastRestocked: "Jun 08, 2023",
-  },
-  {
-    id: "P006",
-    name: "Apple iPhone 14 Pro",
-    sku: "APL-IP14P-GRY-256",
-    category: "Electronics",
-    stock: 0,
-    stockStatus: "Out of Stock",
-    reorderLevel: 5,
-    supplier: "Apple Inc.",
-    lastRestocked: "May 15, 2023",
-  },
-  {
-    id: "P007",
-    name: "Samsung Galaxy S23",
-    sku: "SMS-GS23-BLK-128",
-    category: "Electronics",
-    stock: 3,
-    stockStatus: "Low Stock",
-    reorderLevel: 8,
-    supplier: "Samsung Electronics",
-    lastRestocked: "May 25, 2023",
-  },
-  {
-    id: "P008",
-    name: "Sony WH-1000XM5 Headphones",
-    sku: "SNY-WH1000XM5-SLV",
-    category: "Electronics",
-    stock: 12,
-    stockStatus: "In Stock",
-    reorderLevel: 10,
-    supplier: "Sony Corporation",
-    lastRestocked: "Jun 01, 2023",
-  },
-];
-
-// Inventory statistics
-const inventoryStats = [
-  {
-    title: "Total Products",
-    value: "1,245",
-    icon: <ArrowDownUp className="h-6 w-6 text-shopink-500" />,
-  },
-  {
-    title: "Low Stock Items",
-    value: "24",
-    icon: <AlertTriangle className="h-6 w-6 text-yellow-500" />,
-  },
-  {
-    title: "Out of Stock",
-    value: "8",
-    icon: <AlertTriangle className="h-6 w-6 text-red-500" />,
-  },
-];
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { useProducts } from "@/contexts/ProductContext";
 
 const InventoryPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name");
+  const [isRestockDialogOpen, setIsRestockDialogOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [restockQuantity, setRestockQuantity] = useState(0);
+  
+  const { products, updateProduct } = useProducts();
+  const { toast } = useToast();
   
   const getStockStatusBadge = (status: string) => {
     switch (status) {
@@ -178,25 +83,71 @@ const InventoryPage = () => {
     );
   };
 
-  // Filter and sort products
-  let filteredProducts = productsData.filter(product => {
+  const calculateStockStatus = (stock: number, reorderLevel: number): "In Stock" | "Low Stock" | "Out of Stock" => {
+    if (stock === 0) return "Out of Stock";
+    if (stock <= reorderLevel) return "Low Stock";
+    return "In Stock";
+  };
+
+  const handleRestock = () => {
+    if (!selectedProductId || restockQuantity <= 0) return;
+    
+    const product = products.find(p => p.id === selectedProductId);
+    if (!product) return;
+    
+    const newStock = product.stock + restockQuantity;
+    const newStatus = calculateStockStatus(newStock, 10); // Using 10 as a default reorder level
+    
+    updateProduct({
+      ...product,
+      stock: newStock,
+      status: newStatus
+    });
+    
+    toast({
+      title: "Inventory Updated",
+      description: `Added ${restockQuantity} units to ${product.name}. New stock: ${newStock}`,
+    });
+    
+    setIsRestockDialogOpen(false);
+    setRestockQuantity(0);
+    setSelectedProductId(null);
+  };
+
+  // Convert products to inventory items
+  const inventoryItems = products.map(product => ({
+    id: product.id,
+    name: product.name,
+    sku: `SKU-${product.id}`,
+    category: product.category,
+    stock: product.stock,
+    stockStatus: product.status,
+    reorderLevel: 10, // Default reorder level
+    supplier: product.category === "Footwear" ? "Nike, Inc." 
+            : product.category === "Apparel" ? "H&M Group"
+            : "Apple Inc.",
+    lastRestocked: "Jun 05, 2023",
+  }));
+
+  // Filter and sort inventory items
+  let filteredItems = inventoryItems.filter(item => {
     const matchesSearch = 
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase());
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.sku.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCategory = 
       categoryFilter === "all" || 
-      product.category.toLowerCase() === categoryFilter.toLowerCase();
+      item.category.toLowerCase() === categoryFilter.toLowerCase();
     
     const matchesStock = 
       stockFilter === "all" || 
-      product.stockStatus.toLowerCase().replace(/\s+/g, "-") === stockFilter;
+      item.stockStatus.toLowerCase().replace(/\s+/g, "-") === stockFilter;
     
     return matchesSearch && matchesCategory && matchesStock;
   });
   
-  // Sort products
-  filteredProducts = filteredProducts.sort((a, b) => {
+  // Sort inventory items
+  filteredItems = filteredItems.sort((a, b) => {
     if (sortBy === "name") {
       return a.name.localeCompare(b.name);
     } else if (sortBy === "stock") {
@@ -206,6 +157,25 @@ const InventoryPage = () => {
     }
     return 0;
   });
+
+  // Inventory statistics
+  const inventoryStats = [
+    {
+      title: "Total Products",
+      value: products.length.toString(),
+      icon: <ArrowDownUp className="h-6 w-6 text-shopink-500" />,
+    },
+    {
+      title: "Low Stock Items",
+      value: products.filter(p => p.status === "Low Stock").length.toString(),
+      icon: <AlertTriangle className="h-6 w-6 text-yellow-500" />,
+    },
+    {
+      title: "Out of Stock",
+      value: products.filter(p => p.status === "Out of Stock").length.toString(),
+      icon: <AlertTriangle className="h-6 w-6 text-red-500" />,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -310,27 +280,31 @@ const InventoryPage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProducts.map((product) => (
-              <TableRow key={product.id}>
-                <TableCell className="font-medium">{product.name}</TableCell>
-                <TableCell className="font-mono text-xs">{product.sku}</TableCell>
-                <TableCell>{product.category}</TableCell>
+            {filteredItems.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className="font-medium">{item.name}</TableCell>
+                <TableCell className="font-mono text-xs">{item.sku}</TableCell>
+                <TableCell>{item.category}</TableCell>
                 <TableCell>
                   <div className="w-36">
-                    {getStockProgress(product.stock, product.reorderLevel)}
+                    {getStockProgress(item.stock, item.reorderLevel)}
                   </div>
                 </TableCell>
-                <TableCell>{getStockStatusBadge(product.stockStatus)}</TableCell>
-                <TableCell>{product.supplier}</TableCell>
-                <TableCell>{product.lastRestocked}</TableCell>
+                <TableCell>{getStockStatusBadge(item.stockStatus)}</TableCell>
+                <TableCell>{item.supplier}</TableCell>
+                <TableCell>{item.lastRestocked}</TableCell>
                 <TableCell>
                   <Button 
                     size="sm" 
                     className={
-                      product.stockStatus === "Out of Stock" || product.stockStatus === "Low Stock"
+                      item.stockStatus === "Out of Stock" || item.stockStatus === "Low Stock"
                         ? "bg-shopink-500 hover:bg-shopink-600"
                         : "bg-gray-500 hover:bg-gray-600"
                     }
+                    onClick={() => {
+                      setSelectedProductId(item.id);
+                      setIsRestockDialogOpen(true);
+                    }}
                   >
                     Restock
                   </Button>
@@ -340,6 +314,41 @@ const InventoryPage = () => {
           </TableBody>
         </Table>
       </div>
+
+      {/* Restock Dialog */}
+      <Dialog open={isRestockDialogOpen} onOpenChange={setIsRestockDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Restock Product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="restock-quantity" className="text-sm font-medium">
+                Quantity to Add
+              </label>
+              <Input
+                id="restock-quantity"
+                type="number"
+                min="1"
+                value={restockQuantity}
+                onChange={(e) => setRestockQuantity(parseInt(e.target.value) || 0)}
+                placeholder="Enter quantity"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsRestockDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-shopink-500 hover:bg-shopink-600"
+              onClick={handleRestock}
+            >
+              Update Stock
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
