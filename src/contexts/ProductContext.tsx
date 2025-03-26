@@ -1,72 +1,31 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Product } from '@/components/products/ProductCard';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-// Sample initial products data
-const initialProducts: Product[] = [
-  {
-    id: "1",
-    name: "Nike Air Max 270",
-    category: "Footwear",
-    price: 149.99,
-    stock: 28,
-    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff",
-    status: "In Stock",
-  },
-  {
-    id: "2",
-    name: "Adidas Ultraboost 22",
-    category: "Footwear",
-    price: 189.99,
-    stock: 15,
-    image: "https://images.unsplash.com/photo-1608231387042-66d1773070a5",
-    status: "In Stock",
-  },
-  {
-    id: "3",
-    name: "Puma RS-X Toys",
-    category: "Footwear",
-    price: 119.99,
-    stock: 5,
-    image: "https://images.unsplash.com/photo-1608231387042-66d1773070a5",
-    status: "Low Stock",
-  },
-  {
-    id: "4",
-    name: "Levi's 501 Original Fit Jeans",
-    category: "Apparel",
-    price: 89.99,
-    stock: 42,
-    image: "https://images.unsplash.com/photo-1542272604-787c3835535d",
-    status: "In Stock",
-  },
-  {
-    id: "5",
-    name: "H&M Cotton T-shirt",
-    category: "Apparel",
-    price: 19.99,
-    stock: 68,
-    image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27",
-    status: "In Stock",
-  },
-  {
-    id: "6",
-    name: "Apple iPhone 14 Pro",
-    category: "Electronics",
-    price: 999.99,
-    stock: 0,
-    image: "https://images.unsplash.com/photo-1678652197831-2d180705cd2c",
-    status: "Out of Stock",
-  },
-];
+export type ProductStatus = "In Stock" | "Low Stock" | "Out of Stock";
+
+export interface Product {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  price: number;
+  stock: number;
+  image: string;
+  status: ProductStatus;
+}
 
 interface ProductContextType {
   products: Product[];
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  updateProduct: (product: Product) => void;
-  deleteProduct: (id: string) => void;
+  isLoading: boolean;
+  error: string | null;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  updateProduct: (product: Product) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   getLowStockProducts: () => Product[];
   getOutOfStockProducts: () => Product[];
+  refreshProducts: () => Promise<void>;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -84,21 +43,161 @@ interface ProductProviderProps {
 }
 
 export const ProductProvider = ({ children }: ProductProviderProps) => {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const addProduct = (product: Omit<Product, 'id'>) => {
-    const newId = (Math.max(...products.map(p => parseInt(p.id))) + 1).toString();
-    setProducts([...products, { ...product, id: newId }]);
+  const fetchProducts = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        // Convert database products to our Product type
+        const formattedProducts: Product[] = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          description: item.description || '',
+          price: Number(item.price),
+          stock: item.stock,
+          image: item.image || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff',
+          status: item.status as ProductStatus,
+        }));
+
+        setProducts(formattedProducts);
+      }
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      setError('Failed to fetch products. Please try again later.');
+      toast.error('Failed to fetch products');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const updateProduct = (updatedProduct: Product) => {
-    setProducts(products.map(product => 
-      product.id === updatedProduct.id ? updatedProduct : product
-    ));
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const refreshProducts = async () => {
+    await fetchProducts();
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts(products.filter(product => product.id !== id));
+  const determineStatus = (stock: number): ProductStatus => {
+    if (stock === 0) return "Out of Stock";
+    if (stock <= 5) return "Low Stock";
+    return "In Stock";
+  };
+
+  const addProduct = async (product: Omit<Product, 'id'>) => {
+    try {
+      // Calculate status based on stock level
+      const status = determineStatus(product.stock);
+
+      const { data, error } = await supabase
+        .from('products')
+        .insert([{ 
+          name: product.name,
+          category: product.category,
+          description: product.description,
+          price: product.price,
+          stock: product.stock,
+          image: product.image,
+          status: status,
+        }])
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        // Convert database product to our Product type
+        const newProduct: Product = {
+          id: data[0].id,
+          name: data[0].name,
+          category: data[0].category,
+          description: data[0].description || '',
+          price: Number(data[0].price),
+          stock: data[0].stock,
+          image: data[0].image,
+          status: data[0].status as ProductStatus,
+        };
+
+        setProducts([newProduct, ...products]);
+        toast.success(`${product.name} has been added to your inventory.`);
+      }
+    } catch (err) {
+      console.error('Error adding product:', err);
+      toast.error('Failed to add product');
+    }
+  };
+
+  const updateProduct = async (updatedProduct: Product) => {
+    try {
+      // Calculate status based on stock level
+      const status = determineStatus(updatedProduct.stock);
+
+      const { error } = await supabase
+        .from('products')
+        .update({ 
+          name: updatedProduct.name,
+          category: updatedProduct.category,
+          description: updatedProduct.description,
+          price: updatedProduct.price,
+          stock: updatedProduct.stock,
+          image: updatedProduct.image,
+          status: status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', updatedProduct.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setProducts(products.map(product => 
+        product.id === updatedProduct.id ? {...updatedProduct, status} : product
+      ));
+      
+      toast.success(`${updatedProduct.name} has been updated.`);
+    } catch (err) {
+      console.error('Error updating product:', err);
+      toast.error('Failed to update product');
+    }
+  };
+
+  const deleteProduct = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      const productToDelete = products.find(product => product.id === id);
+      setProducts(products.filter(product => product.id !== id));
+      
+      if (productToDelete) {
+        toast.success(`${productToDelete.name} has been deleted.`);
+      }
+    } catch (err) {
+      console.error('Error deleting product:', err);
+      toast.error('Failed to delete product');
+    }
   };
 
   const getLowStockProducts = () => {
@@ -112,11 +211,14 @@ export const ProductProvider = ({ children }: ProductProviderProps) => {
   return (
     <ProductContext.Provider value={{ 
       products, 
+      isLoading,
+      error,
       addProduct, 
       updateProduct, 
       deleteProduct,
       getLowStockProducts,
-      getOutOfStockProducts
+      getOutOfStockProducts,
+      refreshProducts
     }}>
       {children}
     </ProductContext.Provider>

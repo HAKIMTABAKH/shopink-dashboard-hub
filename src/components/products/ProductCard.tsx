@@ -1,24 +1,19 @@
 
-import { useState } from "react";
-import { Edit, MoreHorizontal, Trash } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React, { useState } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
+import { Button } from "@/components/ui/button";
+import { Pencil, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useProducts, Product } from "@/contexts/ProductContext";
+import { 
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -29,188 +24,241 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
-
-export interface Product {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  stock: number;
-  image: string;
-  status: "In Stock" | "Low Stock" | "Out of Stock";
-}
 
 interface ProductCardProps {
   product: Product;
-  onEdit?: (product: Product) => void;
-  onDelete?: (productId: string) => void;
 }
 
-const ProductCard = ({ product, onEdit, onDelete }: ProductCardProps) => {
-  const [showPreview, setShowPreview] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { toast } = useToast();
+// Schema for form validation
+const productSchema = z.object({
+  name: z.string().min(3, { message: "Product name must be at least 3 characters" }),
+  category: z.string().min(1, { message: "Please select a category" }),
+  price: z.coerce.number().positive({ message: "Price must be positive" }),
+  stock: z.coerce.number().nonnegative({ message: "Stock must be 0 or positive" }),
+  description: z.string().optional(),
+  image: z.string().url({ message: "Please enter a valid URL" }),
+});
 
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(product.id);
-      toast({
-        title: "Product deleted",
-        description: `${product.name} has been removed from your inventory.`,
-      });
-    }
-    setShowDeleteConfirm(false);
+type ProductFormValues = z.infer<typeof productSchema>;
+
+const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+  const { updateProduct, deleteProduct } = useProducts();
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  
+  const form = useForm<ProductFormValues>({
+    resolver: zodResolver(productSchema),
+    defaultValues: {
+      name: product.name,
+      category: product.category,
+      price: product.price,
+      stock: product.stock,
+      description: product.description || "",
+      image: product.image,
+    },
+  });
+
+  const handleSubmit = async (data: ProductFormValues) => {
+    await updateProduct({
+      ...product,
+      name: data.name,
+      category: data.category,
+      price: data.price,
+      stock: data.stock,
+      description: data.description,
+      image: data.image,
+    });
+    setIsEditDialogOpen(false);
   };
 
-  const handleEdit = () => {
-    if (onEdit) {
-      onEdit(product);
-    } else {
-      toast({
-        title: "Edit feature",
-        description: "Edit functionality will be implemented soon.",
-      });
+  const handleDelete = async () => {
+    await deleteProduct(product.id);
+    setIsDeleteDialogOpen(false);
+  };
+
+  const getStatusBadge = () => {
+    switch (product.status) {
+      case "In Stock":
+        return <Badge className="bg-green-500">In Stock</Badge>;
+      case "Low Stock":
+        return <Badge className="bg-yellow-500 text-yellow-900">Low Stock</Badge>;
+      case "Out of Stock":
+        return <Badge className="bg-red-500">Out of Stock</Badge>;
+      default:
+        return <Badge>{product.status}</Badge>;
     }
   };
 
   return (
-    <Card className="overflow-hidden border border-gray-200 dark:border-gray-800">
-      <div className="relative h-48 w-full overflow-hidden bg-gray-100 dark:bg-gray-800">
-        <img
-          src={product.image}
+    <Card className="overflow-hidden">
+      <div className="h-48 overflow-hidden relative">
+        <img 
+          src={product.image} 
           alt={product.name}
-          className="h-full w-full object-cover"
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1542291026-7eec264c27ff";
+          }}
         />
         <div className="absolute top-2 right-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="bg-white/80 dark:bg-black/60 h-8 w-8 rounded-full">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem className="cursor-pointer" onClick={handleEdit}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400"
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                <Trash className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {getStatusBadge()}
         </div>
       </div>
+      
       <CardContent className="p-4">
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-500 dark:text-gray-400">{product.category}</span>
-            <Badge 
-              variant={
-                product.status === "In Stock" 
-                  ? "default" 
-                  : product.status === "Low Stock" 
-                    ? "outline" 
-                    : "destructive"
-              }
-              className={
-                product.status === "In Stock"
-                  ? "bg-green-500"
-                  : product.status === "Low Stock"
-                    ? "border-amber-500 text-amber-500"
-                    : ""
-              }
-            >
-              {product.status}
-            </Badge>
-          </div>
-          <h3 className="font-semibold text-xl truncate">{product.name}</h3>
-          <div className="flex items-center justify-between">
-            <span className="text-lg font-bold">${product.price.toFixed(2)}</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Stock: {product.stock}</span>
-          </div>
+        <div className="mb-2 flex justify-between items-start">
+          <h3 className="font-semibold text-lg">{product.name}</h3>
+          <span className="font-bold text-shopink-600">${product.price.toFixed(2)}</span>
         </div>
+        <p className="text-sm text-gray-500 mb-2">{product.category}</p>
+        <div className="text-sm">Stock: {product.stock} units</div>
       </CardContent>
+      
       <CardFooter className="p-4 pt-0 flex justify-between">
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => setShowPreview(true)}
-        >
-          Preview
-        </Button>
-        <Button 
-          className="bg-shopink-500 hover:bg-shopink-600" 
-          size="sm"
-          onClick={handleEdit}
-        >
-          Edit Details
-        </Button>
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[550px]">
+            <DialogHeader>
+              <DialogTitle>Edit Product</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Product Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter product name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Footwear">Footwear</SelectItem>
+                            <SelectItem value="Apparel">Apparel</SelectItem>
+                            <SelectItem value="Electronics">Electronics</SelectItem>
+                            <SelectItem value="Accessories">Accessories</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stock Quantity</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="1" placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Image URL</FormLabel>
+                      <FormControl>
+                        <Input placeholder="https://..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Product description..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="bg-shopink-500 hover:bg-shopink-600">
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+        
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm">
+              <Trash2 className="h-4 w-4 mr-1" /> Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete{" "}
+                <span className="font-semibold">{product.name}</span> from your inventory.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardFooter>
-
-      {/* Product Preview Dialog */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{product.name}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-[300px] overflow-hidden rounded-md">
-              <img 
-                src={product.image} 
-                alt={product.name} 
-                className="h-full w-full object-cover"
-              />
-            </div>
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Category</h4>
-                <p>{product.category}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Price</h4>
-                <p className="text-xl font-bold">${product.price.toFixed(2)}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Stock</h4>
-                <p>{product.stock} units <Badge className="ml-2">{product.status}</Badge></p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Product ID</h4>
-                <p className="font-mono text-sm">{product.id}</p>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPreview(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete {product.name} from your inventory. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-red-500 hover:bg-red-600" 
-              onClick={handleDelete}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 };
