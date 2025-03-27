@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Search, Filter, Eye, Mail, MoreHorizontal } from "lucide-react";
+import { Search, Filter, Eye, Mail, MoreHorizontal, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,85 +25,24 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { CustomerProvider, useCustomers, Customer } from "@/contexts/CustomerContext";
+import { CustomerForm } from "@/components/customers/CustomerForm";
+import { CustomerDetails } from "@/components/customers/CustomerDetails";
+import { EmailCustomerForm } from "@/components/customers/EmailCustomerForm";
+import { toast } from "sonner";
 
-// Sample data
-const customersData = [
-  {
-    id: "C001",
-    name: "Emma Johnson",
-    email: "emma.johnson@example.com",
-    joinDate: "Mar 15, 2023",
-    orders: 12,
-    spent: 1249.99,
-    status: "Active",
-  },
-  {
-    id: "C002",
-    name: "Liam Smith",
-    email: "liam.smith@example.com",
-    joinDate: "Apr 22, 2023",
-    orders: 5,
-    spent: 499.95,
-    status: "Active",
-  },
-  {
-    id: "C003",
-    name: "Olivia Brown",
-    email: "olivia.brown@example.com",
-    joinDate: "Jan 08, 2023",
-    orders: 8,
-    spent: 859.92,
-    status: "Inactive",
-  },
-  {
-    id: "C004",
-    name: "Noah Wilson",
-    email: "noah.wilson@example.com",
-    joinDate: "May 14, 2023",
-    orders: 2,
-    spent: 159.98,
-    status: "Active",
-  },
-  {
-    id: "C005",
-    name: "Ava Miller",
-    email: "ava.miller@example.com",
-    joinDate: "Feb 17, 2023",
-    orders: 0,
-    spent: 0,
-    status: "Inactive",
-  },
-  {
-    id: "C006",
-    name: "Sophia Anderson",
-    email: "sophia.anderson@example.com",
-    joinDate: "Apr 03, 2023",
-    orders: 4,
-    spent: 379.96,
-    status: "Active",
-  },
-  {
-    id: "C007",
-    name: "Isabella Thomas",
-    email: "isabella.thomas@example.com",
-    joinDate: "Mar 29, 2023",
-    orders: 7,
-    spent: 699.93,
-    status: "Active",
-  },
-  {
-    id: "C008",
-    name: "Mia Jackson",
-    email: "mia.jackson@example.com",
-    joinDate: "Jan 25, 2023",
-    orders: 3,
-    spent: 244.97,
-    status: "Active",
-  },
-];
-
-const CustomersPage = () => {
+const CustomersPageContent = () => {
+  const { customers, isLoading, deleteCustomer, refreshCustomers } = useCustomers();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [emailCustomer, setEmailCustomer] = useState<Customer | null>(null);
   
   const getInitials = (name: string) => {
     return name
@@ -124,11 +63,53 @@ const CustomersPage = () => {
     }
   };
   
-  const filteredCustomers = customersData.filter(customer => 
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteCustomer(id);
+      if (selectedCustomer?.id === id) {
+        setSelectedCustomer(null);
+      }
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+    }
+  };
+
+  const handleSendEmail = (customer: Customer) => {
+    setEmailCustomer(customer);
+  };
+  
+  const filteredCustomers = customers.filter(customer => 
     customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     customer.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Determine customer status based on orders/activity
+  const getCustomerStatus = (customer: Customer): string => {
+    return customer.total_orders > 0 ? "Active" : "Inactive";
+  };
+
+  // Check if a customer is from current month (new)
+  const isNewCustomer = (joinDate: string): boolean => {
+    const customerDate = new Date(joinDate);
+    const currentDate = new Date();
+    return customerDate.getMonth() === currentDate.getMonth() && 
+           customerDate.getFullYear() === currentDate.getFullYear();
+  };
+
+  if (selectedCustomer) {
+    return (
+      <CustomerDetails
+        customer={selectedCustomer}
+        onBack={() => setSelectedCustomer(null)}
+        onDelete={handleDelete}
+        onUpdate={() => {
+          refreshCustomers();
+          setSelectedCustomer(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -147,7 +128,13 @@ const CustomersPage = () => {
             <Filter className="h-4 w-4" />
             Filter
           </Button>
-          <Button className="bg-shopink-500 hover:bg-shopink-600">Add Customer</Button>
+          <Button 
+            className="bg-shopink-500 hover:bg-shopink-600"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Add Customer
+          </Button>
         </div>
       </div>
       
@@ -160,74 +147,104 @@ const CustomersPage = () => {
         </TabsList>
         
         <TabsContent value="all" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredCustomers.map((customer) => (
-              <Card key={customer.id} className="relative overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-shopink-100 text-shopink-800">
-                        {getInitials(customer.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Eye className="mr-2 h-4 w-4" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Mail className="mr-2 h-4 w-4" />
-                          Send Email
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500">
-                          Delete Customer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <CardTitle className="truncate text-lg mt-3">{customer.name}</CardTitle>
-                  <CardDescription className="truncate">{customer.email}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <p>Loading customers...</p>
+            </div>
+          ) : filteredCustomers.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No customers found</p>
+              <Button 
+                className="mt-4 bg-shopink-500 hover:bg-shopink-600"
+                onClick={() => setIsAddDialogOpen(true)}
+              >
+                Add Your First Customer
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredCustomers.map((customer) => (
+                <Card key={customer.id} className="relative overflow-hidden">
+                  <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Customer ID</span>
-                      <span className="text-sm font-medium">{customer.id}</span>
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="bg-shopink-100 text-shopink-800">
+                          {getInitials(customer.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => setSelectedCustomer(customer)}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => handleSendEmail(customer)}
+                          >
+                            <Mail className="mr-2 h-4 w-4" />
+                            Send Email
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className="cursor-pointer text-red-500 focus:text-red-500"
+                            onClick={() => handleDelete(customer.id)}
+                          >
+                            Delete Customer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Join Date</span>
-                      <span className="text-sm">{customer.joinDate}</span>
+                    <CardTitle 
+                      className="truncate text-lg mt-3 cursor-pointer hover:underline"
+                      onClick={() => setSelectedCustomer(customer)}
+                    >
+                      {customer.name}
+                    </CardTitle>
+                    <CardDescription className="truncate">{customer.email}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Customer ID</span>
+                        <span className="text-sm font-medium">{customer.id.substring(0, 8)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Join Date</span>
+                        <span className="text-sm">{customer.joinDate}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Orders</span>
+                        <span className="text-sm">{customer.total_orders}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Total Spent</span>
+                        <span className="text-sm font-medium">${customer.total_spent.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
+                        {getStatusBadge(getCustomerStatus(customer))}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Orders</span>
-                      <span className="text-sm">{customer.orders}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Total Spent</span>
-                      <span className="text-sm font-medium">${customer.spent.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                      {getStatusBadge(customer.status)}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
         
         <TabsContent value="active" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredCustomers
-              .filter(customer => customer.status === "Active")
+              .filter(customer => getCustomerStatus(customer) === "Active")
               .map((customer) => (
                 <Card key={customer.id} className="relative overflow-hidden">
                   <CardHeader className="pb-2">
@@ -244,29 +261,43 @@ const CustomersPage = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="cursor-pointer">
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => setSelectedCustomer(customer)}
+                          >
                             <Eye className="mr-2 h-4 w-4" />
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="cursor-pointer">
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => handleSendEmail(customer)}
+                          >
                             <Mail className="mr-2 h-4 w-4" />
                             Send Email
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500">
+                          <DropdownMenuItem 
+                            className="cursor-pointer text-red-500 focus:text-red-500"
+                            onClick={() => handleDelete(customer.id)}
+                          >
                             Delete Customer
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    <CardTitle className="truncate text-lg mt-3">{customer.name}</CardTitle>
+                    <CardTitle 
+                      className="truncate text-lg mt-3 cursor-pointer hover:underline"
+                      onClick={() => setSelectedCustomer(customer)}
+                    >
+                      {customer.name}
+                    </CardTitle>
                     <CardDescription className="truncate">{customer.email}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Customer ID</span>
-                        <span className="text-sm font-medium">{customer.id}</span>
+                        <span className="text-sm font-medium">{customer.id.substring(0, 8)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Join Date</span>
@@ -274,15 +305,15 @@ const CustomersPage = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Orders</span>
-                        <span className="text-sm">{customer.orders}</span>
+                        <span className="text-sm">{customer.total_orders}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Total Spent</span>
-                        <span className="text-sm font-medium">${customer.spent.toFixed(2)}</span>
+                        <span className="text-sm font-medium">${customer.total_spent.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between pt-2">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                        {getStatusBadge(customer.status)}
+                        {getStatusBadge(getCustomerStatus(customer))}
                       </div>
                     </div>
                   </CardContent>
@@ -294,7 +325,7 @@ const CustomersPage = () => {
         <TabsContent value="inactive" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredCustomers
-              .filter(customer => customer.status === "Inactive")
+              .filter(customer => getCustomerStatus(customer) === "Inactive")
               .map((customer) => (
                 <Card key={customer.id} className="relative overflow-hidden">
                   <CardHeader className="pb-2">
@@ -311,29 +342,43 @@ const CustomersPage = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="cursor-pointer">
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => setSelectedCustomer(customer)}
+                          >
                             <Eye className="mr-2 h-4 w-4" />
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="cursor-pointer">
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => handleSendEmail(customer)}
+                          >
                             <Mail className="mr-2 h-4 w-4" />
                             Send Email
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500">
+                          <DropdownMenuItem 
+                            className="cursor-pointer text-red-500 focus:text-red-500"
+                            onClick={() => handleDelete(customer.id)}
+                          >
                             Delete Customer
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    <CardTitle className="truncate text-lg mt-3">{customer.name}</CardTitle>
+                    <CardTitle 
+                      className="truncate text-lg mt-3 cursor-pointer hover:underline"
+                      onClick={() => setSelectedCustomer(customer)}
+                    >
+                      {customer.name}
+                    </CardTitle>
                     <CardDescription className="truncate">{customer.email}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Customer ID</span>
-                        <span className="text-sm font-medium">{customer.id}</span>
+                        <span className="text-sm font-medium">{customer.id.substring(0, 8)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Join Date</span>
@@ -341,15 +386,15 @@ const CustomersPage = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Orders</span>
-                        <span className="text-sm">{customer.orders}</span>
+                        <span className="text-sm">{customer.total_orders}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Total Spent</span>
-                        <span className="text-sm font-medium">${customer.spent.toFixed(2)}</span>
+                        <span className="text-sm font-medium">${customer.total_spent.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between pt-2">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                        {getStatusBadge(customer.status)}
+                        {getStatusBadge(getCustomerStatus(customer))}
                       </div>
                     </div>
                   </CardContent>
@@ -361,7 +406,7 @@ const CustomersPage = () => {
         <TabsContent value="new" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredCustomers
-              .filter(customer => new Date(customer.joinDate).getMonth() === new Date().getMonth())
+              .filter(customer => isNewCustomer(customer.joinDate))
               .map((customer) => (
                 <Card key={customer.id} className="relative overflow-hidden">
                   <CardHeader className="pb-2">
@@ -378,29 +423,43 @@ const CustomersPage = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="cursor-pointer">
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => setSelectedCustomer(customer)}
+                          >
                             <Eye className="mr-2 h-4 w-4" />
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="cursor-pointer">
+                          <DropdownMenuItem 
+                            className="cursor-pointer"
+                            onClick={() => handleSendEmail(customer)}
+                          >
                             <Mail className="mr-2 h-4 w-4" />
                             Send Email
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500">
+                          <DropdownMenuItem 
+                            className="cursor-pointer text-red-500 focus:text-red-500"
+                            onClick={() => handleDelete(customer.id)}
+                          >
                             Delete Customer
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    <CardTitle className="truncate text-lg mt-3">{customer.name}</CardTitle>
+                    <CardTitle 
+                      className="truncate text-lg mt-3 cursor-pointer hover:underline"
+                      onClick={() => setSelectedCustomer(customer)}
+                    >
+                      {customer.name}
+                    </CardTitle>
                     <CardDescription className="truncate">{customer.email}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Customer ID</span>
-                        <span className="text-sm font-medium">{customer.id}</span>
+                        <span className="text-sm font-medium">{customer.id.substring(0, 8)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Join Date</span>
@@ -408,15 +467,15 @@ const CustomersPage = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Orders</span>
-                        <span className="text-sm">{customer.orders}</span>
+                        <span className="text-sm">{customer.total_orders}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Total Spent</span>
-                        <span className="text-sm font-medium">${customer.spent.toFixed(2)}</span>
+                        <span className="text-sm font-medium">${customer.total_spent.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between pt-2">
                         <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                        {getStatusBadge(customer.status)}
+                        {getStatusBadge(getCustomerStatus(customer))}
                       </div>
                     </div>
                   </CardContent>
@@ -425,7 +484,40 @@ const CustomersPage = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Add Customer Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add Customer</DialogTitle>
+          </DialogHeader>
+          <CustomerForm onSuccess={() => {
+            setIsAddDialogOpen(false);
+            toast.success("Customer added successfully");
+            refreshCustomers();
+          }} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Customer Dialog */}
+      {emailCustomer && (
+        <EmailCustomerForm
+          customer={emailCustomer}
+          open={Boolean(emailCustomer)}
+          onOpenChange={(open) => {
+            if (!open) setEmailCustomer(null);
+          }}
+        />
+      )}
     </div>
+  );
+};
+
+const CustomersPage = () => {
+  return (
+    <CustomerProvider>
+      <CustomersPageContent />
+    </CustomerProvider>
   );
 };
 

@@ -22,110 +22,23 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { DiscountProvider, useDiscounts, Discount } from "@/contexts/DiscountContext";
+import { DiscountForm } from "@/components/discounts/DiscountForm";
+import { DiscountDetails } from "@/components/discounts/DiscountDetails";
+import { toast } from "sonner";
 
-// Sample discounts data
-const discountsData = [
-  {
-    id: "DISC001",
-    name: "Summer Sale 2023",
-    code: "SUMMER23",
-    type: "Percentage",
-    value: 15,
-    usage: 124,
-    maxUsage: 500,
-    startDate: "Jun 1, 2023",
-    endDate: "Aug 31, 2023",
-    status: "Active",
-  },
-  {
-    id: "DISC002",
-    name: "New User Discount",
-    code: "WELCOME10",
-    type: "Percentage",
-    value: 10,
-    usage: 287,
-    maxUsage: 1000,
-    startDate: "Jan 1, 2023",
-    endDate: "Dec 31, 2023",
-    status: "Active",
-  },
-  {
-    id: "DISC003",
-    name: "Weekend Flash Sale",
-    code: "FLASH25",
-    type: "Percentage",
-    value: 25,
-    usage: 78,
-    maxUsage: 100,
-    startDate: "Jun 24, 2023",
-    endDate: "Jun 25, 2023",
-    status: "Active",
-  },
-  {
-    id: "DISC004",
-    name: "Free Shipping",
-    code: "FREESHIP",
-    type: "Fixed",
-    value: 10,
-    usage: 312,
-    maxUsage: 500,
-    startDate: "May 1, 2023",
-    endDate: "Jul 31, 2023",
-    status: "Active",
-  },
-  {
-    id: "DISC005",
-    name: "Spring Clearance",
-    code: "SPRING30",
-    type: "Percentage",
-    value: 30,
-    usage: 450,
-    maxUsage: 450,
-    startDate: "Mar 1, 2023",
-    endDate: "May 31, 2023",
-    status: "Expired",
-  },
-  {
-    id: "DISC006",
-    name: "VIP Customer Discount",
-    code: "VIP15",
-    type: "Percentage",
-    value: 15,
-    usage: 89,
-    maxUsage: null,
-    startDate: "Jan 1, 2023",
-    endDate: null,
-    status: "Active",
-  },
-  {
-    id: "DISC007",
-    name: "Holiday Promotion",
-    code: "HOLIDAY20",
-    type: "Percentage",
-    value: 20,
-    usage: 0,
-    maxUsage: 300,
-    startDate: "Dec 1, 2023",
-    endDate: "Dec 31, 2023",
-    status: "Scheduled",
-  },
-  {
-    id: "DISC008",
-    name: "Clearance Items",
-    code: "CLEAR50",
-    type: "Percentage",
-    value: 50,
-    usage: 175,
-    maxUsage: 200,
-    startDate: "May 15, 2023",
-    endDate: "Jun 15, 2023",
-    status: "Expired",
-  },
-];
-
-const DiscountsPage = () => {
+const DiscountsPageContent = () => {
+  const { discounts, isLoading, deleteDiscount, refreshDiscounts } = useDiscounts();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -145,10 +58,35 @@ const DiscountsPage = () => {
     return Math.min(Math.round((usage / maxUsage) * 100), 100);
   };
   
-  const filteredDiscounts = discountsData.filter(discount => 
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDiscount(id);
+      if (selectedDiscount?.id === id) {
+        setSelectedDiscount(null);
+      }
+    } catch (error) {
+      console.error("Error deleting discount:", error);
+    }
+  };
+  
+  const filteredDiscounts = discounts.filter(discount => 
     discount.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     discount.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (selectedDiscount) {
+    return (
+      <DiscountDetails
+        discount={selectedDiscount}
+        onBack={() => setSelectedDiscount(null)}
+        onDelete={handleDelete}
+        onUpdate={() => {
+          refreshDiscounts();
+          setSelectedDiscount(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -162,7 +100,10 @@ const DiscountsPage = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <Button className="bg-shopink-500 hover:bg-shopink-600">
+        <Button 
+          className="bg-shopink-500 hover:bg-shopink-600"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
           <PlusCircle className="mr-2 h-4 w-4" />
           Create Discount
         </Button>
@@ -177,114 +118,31 @@ const DiscountsPage = () => {
         </TabsList>
         
         <TabsContent value="all" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredDiscounts.map((discount) => (
-              <Card key={discount.id} className="overflow-hidden">
-                <CardContent className="p-6">
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-semibold">{discount.name}</h3>
-                        <div className="flex items-center mt-1 space-x-2">
-                          <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-sm font-mono">
-                            {discount.code}
-                          </span>
-                          {getStatusBadge(discount.status)}
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <Percent className="h-4 w-4 mr-2 text-gray-500" />
-                          <span>Discount</span>
-                        </div>
-                        <span className="font-semibold">
-                          {discount.type === "Percentage" 
-                            ? `${discount.value}%` 
-                            : `$${discount.value.toFixed(2)}`}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-gray-500" />
-                          <span>Period</span>
-                        </div>
-                        <span>
-                          {discount.startDate} {discount.endDate ? `- ${discount.endDate}` : 'onwards'}
-                        </span>
-                      </div>
-                      
-                      {discount.maxUsage !== null && (
-                        <div className="pt-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm">Usage</span>
-                            <span className="text-sm">
-                              {discount.usage} / {discount.maxUsage}
-                            </span>
-                          </div>
-                          <Progress 
-                            value={calculateUsagePercentage(discount.usage, discount.maxUsage)} 
-                            className="h-2"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="p-4 border-t bg-gray-50 dark:bg-gray-800/50 flex justify-between">
-                  <Button variant="outline" size="sm">
-                    <Eye className="mr-2 h-3 w-3" />
-                    View
-                  </Button>
-                  <Button 
-                    className="bg-shopink-500 hover:bg-shopink-600" 
-                    size="sm"
-                  >
-                    <Edit className="mr-2 h-3 w-3" />
-                    Edit
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="active" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredDiscounts
-              .filter(discount => discount.status === "Active")
-              .map((discount) => (
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <p>Loading discounts...</p>
+            </div>
+          ) : filteredDiscounts.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No discounts found</p>
+              <Button 
+                className="mt-4 bg-shopink-500 hover:bg-shopink-600"
+                onClick={() => setIsAddDialogOpen(true)}
+              >
+                Create Your First Discount
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredDiscounts.map((discount) => (
                 <Card key={discount.id} className="overflow-hidden">
                   <CardContent className="p-6">
                     <div className="flex flex-col space-y-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="text-lg font-semibold">{discount.name}</h3>
+                          <h3 className="text-lg font-semibold cursor-pointer hover:underline" onClick={() => setSelectedDiscount(discount)}>
+                            {discount.name}
+                          </h3>
                           <div className="flex items-center mt-1 space-x-2">
                             <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-sm font-mono">
                               {discount.code}
@@ -299,16 +157,28 @@ const DiscountsPage = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="cursor-pointer">
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => setSelectedDiscount(discount)}
+                            >
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => {
+                                navigator.clipboard.writeText(discount.code);
+                                toast.success("Discount code copied to clipboard");
+                              }}
+                            >
+                              <Percent className="mr-2 h-4 w-4" />
+                              Copy Code
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400">
+                            <DropdownMenuItem 
+                              className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400"
+                              onClick={() => handleDelete(discount.id)}
+                            >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
@@ -357,13 +227,138 @@ const DiscountsPage = () => {
                     </div>
                   </CardContent>
                   <CardFooter className="p-4 border-t bg-gray-50 dark:bg-gray-800/50 flex justify-between">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
+                    >
                       <Eye className="mr-2 h-3 w-3" />
                       View
                     </Button>
                     <Button 
                       className="bg-shopink-500 hover:bg-shopink-600" 
                       size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
+                    >
+                      <Edit className="mr-2 h-3 w-3" />
+                      Edit
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="active" className="mt-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredDiscounts
+              .filter(discount => discount.status === "Active")
+              .map((discount) => (
+                <Card key={discount.id} className="overflow-hidden">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-semibold cursor-pointer hover:underline" onClick={() => setSelectedDiscount(discount)}>
+                            {discount.name}
+                          </h3>
+                          <div className="flex items-center mt-1 space-x-2">
+                            <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-sm font-mono">
+                              {discount.code}
+                            </span>
+                            {getStatusBadge(discount.status)}
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => setSelectedDiscount(discount)}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => {
+                                navigator.clipboard.writeText(discount.code);
+                                toast.success("Discount code copied to clipboard");
+                              }}
+                            >
+                              <Percent className="mr-2 h-4 w-4" />
+                              Copy Code
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400"
+                              onClick={() => handleDelete(discount.id)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <Percent className="h-4 w-4 mr-2 text-gray-500" />
+                            <span>Discount</span>
+                          </div>
+                          <span className="font-semibold">
+                            {discount.type === "Percentage" 
+                              ? `${discount.value}%` 
+                              : `$${discount.value.toFixed(2)}`}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <Calendar className="h-4 w-4 mr-2 text-gray-500" />
+                            <span>Period</span>
+                          </div>
+                          <span>
+                            {discount.startDate} {discount.endDate ? `- ${discount.endDate}` : 'onwards'}
+                          </span>
+                        </div>
+                        
+                        {discount.maxUsage !== null && (
+                          <div className="pt-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm">Usage</span>
+                              <span className="text-sm">
+                                {discount.usage} / {discount.maxUsage}
+                              </span>
+                            </div>
+                            <Progress 
+                              value={calculateUsagePercentage(discount.usage, discount.maxUsage)} 
+                              className="h-2"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="p-4 border-t bg-gray-50 dark:bg-gray-800/50 flex justify-between">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
+                    >
+                      <Eye className="mr-2 h-3 w-3" />
+                      View
+                    </Button>
+                    <Button 
+                      className="bg-shopink-500 hover:bg-shopink-600"
+                      size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
                     >
                       <Edit className="mr-2 h-3 w-3" />
                       Edit
@@ -384,7 +379,9 @@ const DiscountsPage = () => {
                     <div className="flex flex-col space-y-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="text-lg font-semibold">{discount.name}</h3>
+                          <h3 className="text-lg font-semibold cursor-pointer hover:underline" onClick={() => setSelectedDiscount(discount)}>
+                            {discount.name}
+                          </h3>
                           <div className="flex items-center mt-1 space-x-2">
                             <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-sm font-mono">
                               {discount.code}
@@ -399,16 +396,28 @@ const DiscountsPage = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="cursor-pointer">
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => setSelectedDiscount(discount)}
+                            >
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => {
+                                navigator.clipboard.writeText(discount.code);
+                                toast.success("Discount code copied to clipboard");
+                              }}
+                            >
+                              <Percent className="mr-2 h-4 w-4" />
+                              Copy Code
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400">
+                            <DropdownMenuItem 
+                              className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400"
+                              onClick={() => handleDelete(discount.id)}
+                            >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
@@ -457,13 +466,18 @@ const DiscountsPage = () => {
                     </div>
                   </CardContent>
                   <CardFooter className="p-4 border-t bg-gray-50 dark:bg-gray-800/50 flex justify-between">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
+                    >
                       <Eye className="mr-2 h-3 w-3" />
                       View
                     </Button>
                     <Button 
-                      className="bg-shopink-500 hover:bg-shopink-600" 
+                      className="bg-shopink-500 hover:bg-shopink-600"
                       size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
                     >
                       <Edit className="mr-2 h-3 w-3" />
                       Edit
@@ -484,7 +498,9 @@ const DiscountsPage = () => {
                     <div className="flex flex-col space-y-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="text-lg font-semibold">{discount.name}</h3>
+                          <h3 className="text-lg font-semibold cursor-pointer hover:underline" onClick={() => setSelectedDiscount(discount)}>
+                            {discount.name}
+                          </h3>
                           <div className="flex items-center mt-1 space-x-2">
                             <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-sm font-mono">
                               {discount.code}
@@ -499,16 +515,28 @@ const DiscountsPage = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="cursor-pointer">
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => setSelectedDiscount(discount)}
+                            >
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => {
+                                navigator.clipboard.writeText(discount.code);
+                                toast.success("Discount code copied to clipboard");
+                              }}
+                            >
+                              <Percent className="mr-2 h-4 w-4" />
+                              Copy Code
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400">
+                            <DropdownMenuItem 
+                              className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400"
+                              onClick={() => handleDelete(discount.id)}
+                            >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
@@ -557,13 +585,18 @@ const DiscountsPage = () => {
                     </div>
                   </CardContent>
                   <CardFooter className="p-4 border-t bg-gray-50 dark:bg-gray-800/50 flex justify-between">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
+                    >
                       <Eye className="mr-2 h-3 w-3" />
                       View
                     </Button>
                     <Button 
-                      className="bg-shopink-500 hover:bg-shopink-600" 
+                      className="bg-shopink-500 hover:bg-shopink-600"
                       size="sm"
+                      onClick={() => setSelectedDiscount(discount)}
                     >
                       <Edit className="mr-2 h-3 w-3" />
                       Edit
@@ -574,7 +607,29 @@ const DiscountsPage = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Add Discount Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Create Discount</DialogTitle>
+          </DialogHeader>
+          <DiscountForm onSuccess={() => {
+            setIsAddDialogOpen(false);
+            toast.success("Discount created successfully");
+            refreshDiscounts();
+          }} />
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+};
+
+const DiscountsPage = () => {
+  return (
+    <DiscountProvider>
+      <DiscountsPageContent />
+    </DiscountProvider>
   );
 };
 

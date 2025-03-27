@@ -17,33 +17,39 @@ import MarketingPage from "./pages/marketing";
 import SettingsPage from "./pages/settings";
 import NotFound from "./pages/NotFound";
 import { ProductProvider } from "./contexts/ProductContext";
+import { CustomerProvider } from "./contexts/CustomerContext";
+import { DiscountProvider } from "./contexts/DiscountContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ProductProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<DashboardLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="products" element={<ProductsPage />} />
-              <Route path="orders" element={<OrdersPage />} />
-              <Route path="customers" element={<CustomersPage />} />
-              <Route path="payments" element={<PaymentsPage />} />
-              <Route path="discounts" element={<DiscountsPage />} />
-              <Route path="inventory" element={<InventoryPage />} />
-              <Route path="reports" element={<ReportsPage />} />
-              <Route path="marketing" element={<MarketingPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <CustomerProvider>
+        <DiscountProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<DashboardLayout />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="products" element={<ProductsPage />} />
+                  <Route path="orders" element={<OrdersPage />} />
+                  <Route path="customers" element={<CustomersPage />} />
+                  <Route path="payments" element={<PaymentsPage />} />
+                  <Route path="discounts" element={<DiscountsPage />} />
+                  <Route path="inventory" element={<InventoryPage />} />
+                  <Route path="reports" element={<ReportsPage />} />
+                  <Route path="marketing" element={<MarketingPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </DiscountProvider>
+      </CustomerProvider>
     </ProductProvider>
   </QueryClientProvider>
 );
