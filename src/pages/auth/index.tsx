@@ -2,214 +2,237 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { ShoppingBag, Mail, Lock, User } from "lucide-react";
+import { toast } from "sonner";
 
 const AuthPage = () => {
-  const navigate = useNavigate();
-  const { signIn, signUp, user } = useAuth();
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-
-  // Form states
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { signIn, signUp } = useAuth();
 
-  // If already logged in, redirect to dashboard
-  if (user) {
-    navigate("/");
-    return null;
-  }
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast({
-        title: "Error",
-        description: "Please fill out all fields",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsLoading(true);
-    const { error } = await signIn(email, password);
-    setIsLoading(false);
+    setAuthError(null);
 
-    if (error) {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Login successful",
-        description: "Welcome back to the dashboard!",
-      });
-      navigate("/");
+    try {
+      const { error } = await signIn(email, password);
+      if (error) {
+        setAuthError(error.message);
+        toast.error("Failed to sign in", {
+          description: error.message,
+        });
+      } else {
+        toast.success("Signed in successfully");
+        navigate("/");
+      }
+    } catch (error) {
+      setAuthError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password || !fullName) {
-      toast({
-        title: "Error",
-        description: "Please fill out all fields",
-        variant: "destructive",
-      });
+    setIsLoading(true);
+    setAuthError(null);
+
+    if (!fullName.trim()) {
+      setAuthError("Full name is required");
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    const { error } = await signUp(email, password, fullName);
-    setIsLoading(false);
-
-    if (error) {
-      toast({
-        title: "Signup failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Account created",
-        description: "Please check your email to confirm your account",
-      });
-      setAuthMode("login");
+    try {
+      const { error } = await signUp(email, password, fullName);
+      if (error) {
+        setAuthError(error.message);
+        toast.error("Failed to sign up", {
+          description: error.message,
+        });
+      } else {
+        toast.success("Account created successfully", {
+          description: "Please check your email to verify your account.",
+        });
+        navigate("/");
+      }
+    } catch (error) {
+      setAuthError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className="w-10 h-10 rounded-full bg-shopink-500 flex items-center justify-center">
-              <span className="text-black font-bold text-lg">S</span>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Shopink</h1>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to Shopink Dashboard</h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Sign in to your account to continue</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <div className="flex flex-col items-center mb-8">
+        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-shopink-500 mb-4">
+          <ShoppingBag className="h-6 w-6 text-white" />
         </div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Shopink Admin</h1>
+        <p className="text-gray-500 dark:text-gray-400">Manage your e-commerce platform</p>
+      </div>
 
-        <Card>
-          <Tabs defaultValue={authMode} onValueChange={(value) => setAuthMode(value as "login" | "signup")}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome back</CardTitle>
+          <CardDescription>Sign in to your account or create a new one</CardDescription>
+        </CardHeader>
 
-            <TabsContent value="login">
-              <form onSubmit={handleLogin}>
-                <CardHeader>
-                  <CardTitle>Login</CardTitle>
-                  <CardDescription>Enter your credentials to access your account</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="name@example.com" 
+        <Tabs defaultValue="login" className="w-full">
+          <TabsList className="grid grid-cols-2 w-full">
+            <TabsTrigger value="login">Sign In</TabsTrigger>
+            <TabsTrigger value="register">Sign Up</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="login">
+            <form onSubmit={handleSignIn}>
+              <CardContent className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="name@example.com"
+                      className="pl-10"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="space-y-2">
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <Label htmlFor="password">Password</Label>
-                    <Input 
-                      id="password" 
-                      type="password" 
-                      placeholder="••••••••" 
+                    <a href="#" className="text-sm text-shopink-500 hover:text-shopink-600 font-medium">
+                      Forgot password?
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      className="pl-10"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                     />
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Logging in...
-                      </>
-                    ) : (
-                      "Login"
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
+                </div>
 
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup}>
-                <CardHeader>
-                  <CardTitle>Create an account</CardTitle>
-                  <CardDescription>Enter your details to create a new account</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input 
-                      id="fullName" 
-                      placeholder="John Doe" 
+                {authError && (
+                  <div className="text-red-500 text-sm p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                    {authError}
+                  </div>
+                )}
+              </CardContent>
+
+              <CardFooter className="flex flex-col">
+                <Button
+                  type="submit"
+                  className="w-full bg-shopink-500 hover:bg-shopink-600"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Signing in..." : "Sign In"}
+                </Button>
+              </CardFooter>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="register">
+            <form onSubmit={handleSignUp}>
+              <CardContent className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="fullName"
+                      type="text"
+                      placeholder="John Doe"
+                      className="pl-10"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email-signup">Email</Label>
-                    <Input 
-                      id="email-signup" 
-                      type="email" 
-                      placeholder="name@example.com" 
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="emailRegister">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="emailRegister"
+                      type="email"
+                      placeholder="name@example.com"
+                      className="pl-10"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-signup">Password</Label>
-                    <Input 
-                      id="password-signup" 
-                      type="password" 
-                      placeholder="••••••••" 
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="passwordRegister">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="passwordRegister"
+                      type="password"
+                      placeholder="••••••••"
+                      className="pl-10"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                     />
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      "Create Account"
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </Card>
+                </div>
+
+                {authError && (
+                  <div className="text-red-500 text-sm p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                    {authError}
+                  </div>
+                )}
+              </CardContent>
+
+              <CardFooter className="flex flex-col">
+                <Button
+                  type="submit"
+                  className="w-full bg-shopink-500 hover:bg-shopink-600"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Creating Account..." : "Create Account"}
+                </Button>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+                  By signing up, you agree to our Terms of Service and Privacy Policy.
+                </p>
+              </CardFooter>
+            </form>
+          </TabsContent>
+        </Tabs>
+      </Card>
+
+      <div className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p>© 2023 Shopink. All rights reserved.</p>
       </div>
     </div>
   );
