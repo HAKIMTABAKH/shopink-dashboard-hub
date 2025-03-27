@@ -20,6 +20,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface SidebarItemProps {
   icon: React.ElementType;
@@ -52,6 +54,8 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
+  const { signOut, user } = useAuth();
+  const { toast } = useToast();
 
   const sidebarItems = [
     {
@@ -121,6 +125,28 @@ const Sidebar = () => {
     closeSidebar();
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Logged out successfully",
+        description: "You have been logged out of your account",
+      });
+      navigate("/auth");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // If no user is logged in, don't render the sidebar
+  if (!user) {
+    return null;
+  }
+
   return (
     <>
       {/* Mobile Menu Button */}
@@ -183,6 +209,7 @@ const Sidebar = () => {
           <Button 
             variant="ghost" 
             className="w-full justify-start text-gray-600 hover:text-red-500 hover:bg-red-50 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+            onClick={handleLogout}
           >
             <LogOut className="mr-3 h-5 w-5" />
             Log Out

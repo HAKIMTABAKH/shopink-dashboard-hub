@@ -1,12 +1,12 @@
-
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
-import { Bell, Moon, Sun, Search } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Bell, Moon, Sun, Search, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 
 const pathToTitle: Record<string, string> = {
   "/": "Dashboard",
@@ -24,7 +24,9 @@ const pathToTitle: Record<string, string> = {
 const Header = () => {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const location = useLocation();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { user, signOut } = useAuth();
   
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -34,17 +36,30 @@ const Header = () => {
 
   const pageTitle = pathToTitle[location.pathname] || "Dashboard";
 
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/auth");
+  };
+
+  if (!user) {
+    return null;
+  }
+
+  const getInitials = () => {
+    if (!user) return "U";
+    const email = user.email || "";
+    return email.substring(0, 2).toUpperCase();
+  };
+
   return (
     <header className="sticky top-0 z-30 w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
       <div className="container py-4 flex items-center justify-between">
-        {/* Left: Page Title */}
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             {pageTitle}
           </h1>
         </div>
 
-        {/* Right: Search, Theme Toggle, Notifications, Avatar */}
         <div className="flex items-center space-x-3">
           {!isMobile && (
             <div className="relative w-64">
@@ -98,10 +113,38 @@ const Header = () => {
             </PopoverContent>
           </Popover>
 
-          <Avatar>
-            <AvatarImage src="" />
-            <AvatarFallback className="bg-shopink-100 text-shopink-800">JD</AvatarFallback>
-          </Avatar>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Avatar className="cursor-pointer">
+                <AvatarImage src="" />
+                <AvatarFallback className="bg-shopink-100 text-shopink-800">{getInitials()}</AvatarFallback>
+              </Avatar>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0" align="end">
+              <div className="p-4 border-b border-gray-100 dark:border-gray-800">
+                <p className="text-sm font-medium">{user.email}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
+              </div>
+              <div className="p-2">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start text-sm" 
+                  onClick={() => navigate("/settings")}
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  Profile Settings
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start text-sm text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log Out
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </header>
