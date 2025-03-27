@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PlusCircle, Mail, BellRing, Send, Calendar, Search, Users, CheckCircle, Clock, Target, MoreHorizontal, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,108 +21,60 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-// Sample data for campaigns
-const campaignsData = [
-  {
-    id: "CAM001",
-    name: "Summer Collection Launch",
-    type: "Email",
-    status: "Scheduled",
-    audience: "All Customers",
-    recipients: 3245,
-    scheduledDate: "Jun 25, 2023",
-    openRate: null,
-    clickRate: null,
-  },
-  {
-    id: "CAM002",
-    name: "Flash Sale Weekend",
-    type: "Push Notification",
-    status: "Active",
-    audience: "Previous Buyers",
-    recipients: 1820,
-    scheduledDate: "Jun 15, 2023",
-    openRate: 62,
-    clickRate: 28,
-  },
-  {
-    id: "CAM003",
-    name: "New User Welcome",
-    type: "Email",
-    status: "Active",
-    audience: "New Customers",
-    recipients: 420,
-    scheduledDate: "Automated",
-    openRate: 78,
-    clickRate: 45,
-  },
-  {
-    id: "CAM004",
-    name: "Abandoned Cart Reminder",
-    type: "Email",
-    status: "Active",
-    audience: "Cart Abandoners",
-    recipients: 187,
-    scheduledDate: "Automated",
-    openRate: 54,
-    clickRate: 32,
-  },
-  {
-    id: "CAM005",
-    name: "Holiday Season Promotion",
-    type: "Email",
-    status: "Draft",
-    audience: "All Customers",
-    recipients: 0,
-    scheduledDate: "Not scheduled",
-    openRate: null,
-    clickRate: null,
-  },
-  {
-    id: "CAM006",
-    name: "Loyalty Program Rewards",
-    type: "Push Notification",
-    status: "Completed",
-    audience: "VIP Customers",
-    recipients: 576,
-    scheduledDate: "Jun 02, 2023",
-    openRate: 82,
-    clickRate: 54,
-  },
-];
-
-// Sample data for audience segments
-const audienceSegments = [
-  {
-    name: "All Customers",
-    count: 8725,
-    description: "All registered customers",
-  },
-  {
-    name: "Active Buyers",
-    count: 5433,
-    description: "Customers who made a purchase in the last 3 months",
-  },
-  {
-    name: "New Users",
-    count: 1245,
-    description: "Customers who registered in the last 30 days",
-  },
-  {
-    name: "Cart Abandoners",
-    count: 876,
-    description: "Customers who abandoned their cart in the last 7 days",
-  },
-  {
-    name: "VIP Customers",
-    count: 576,
-    description: "Customers who spent over $1000 in the last year",
-  },
-];
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import CreateCampaignDialog from "@/components/marketing/CreateCampaignDialog";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  getCampaigns, 
+  getAudienceSegments, 
+  sendCampaignNow, 
+  rescheduleCampaign, 
+  deleteCampaign 
+} from "@/services/marketing";
+import type { Campaign, AudienceSegment } from "@/services/marketing";
 
 const MarketingPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [audienceSegments, setAudienceSegments] = useState<AudienceSegment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [newScheduleDate, setNewScheduleDate] = useState("");
+  
+  const { toast } = useToast();
+  
+  useEffect(() => {
+    fetchData();
+  }, []);
+  
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [campaignsData, audienceData] = await Promise.all([
+        getCampaigns(),
+        getAudienceSegments()
+      ]);
+      
+      setCampaigns(campaignsData);
+      setAudienceSegments(audienceData);
+    } catch (error) {
+      console.error("Error fetching marketing data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load marketing data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -150,11 +102,98 @@ const MarketingPage = () => {
     }
   };
   
-  const filteredCampaigns = campaignsData.filter(campaign => 
+  const filteredCampaigns = campaigns.filter(campaign => 
     campaign.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     campaign.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
     campaign.audience.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  
+  const handleSendNow = async (campaignId: string) => {
+    try {
+      await sendCampaignNow(campaignId);
+      
+      // Update the campaign status in the local state
+      setCampaigns(prevCampaigns => 
+        prevCampaigns.map(campaign => 
+          campaign.id === campaignId 
+            ? { ...campaign, status: "Active" } 
+            : campaign
+        )
+      );
+      
+      toast({
+        title: "Campaign Sent",
+        description: "Your campaign has been queued and will be sent immediately.",
+      });
+    } catch (error) {
+      console.error("Error sending campaign:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send campaign. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const openRescheduleDialog = (campaignId: string) => {
+    setSelectedCampaignId(campaignId);
+    setNewScheduleDate("");
+    setRescheduleDialogOpen(true);
+  };
+  
+  const handleReschedule = async () => {
+    if (!selectedCampaignId || !newScheduleDate) return;
+    
+    try {
+      await rescheduleCampaign(selectedCampaignId, newScheduleDate);
+      
+      // Update the campaign in the local state
+      setCampaigns(prevCampaigns => 
+        prevCampaigns.map(campaign => 
+          campaign.id === selectedCampaignId 
+            ? { ...campaign, scheduledDate: new Date(newScheduleDate).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) } 
+            : campaign
+        )
+      );
+      
+      toast({
+        title: "Campaign Rescheduled",
+        description: `Campaign has been rescheduled to ${new Date(newScheduleDate).toLocaleDateString()}.`,
+      });
+      
+      setRescheduleDialogOpen(false);
+    } catch (error) {
+      console.error("Error rescheduling campaign:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reschedule campaign. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const handleDeleteCampaign = async (campaignId: string) => {
+    try {
+      await deleteCampaign(campaignId);
+      
+      // Remove the campaign from the local state
+      setCampaigns(prevCampaigns => 
+        prevCampaigns.filter(campaign => campaign.id !== campaignId)
+      );
+      
+      toast({
+        title: "Campaign Deleted",
+        description: "Your campaign has been deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting campaign:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete campaign. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -163,10 +202,7 @@ const MarketingPage = () => {
           <h2 className="text-xl font-semibold mb-1">Marketing & Campaigns</h2>
           <p className="text-gray-500 dark:text-gray-400">Create and manage marketing campaigns</p>
         </div>
-        <Button className="bg-shopink-500 hover:bg-shopink-600">
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Create Campaign
-        </Button>
+        <CreateCampaignDialog onCampaignCreated={fetchData} />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -178,9 +214,9 @@ const MarketingPage = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{campaignsData.length}</div>
+            <div className="text-2xl font-bold">{campaigns.length}</div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {campaignsData.filter(c => c.status === "Active").length} active campaigns
+              {campaigns.filter(c => c.status === "Active").length} active campaigns
             </p>
           </CardContent>
         </Card>
@@ -194,10 +230,10 @@ const MarketingPage = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.round(campaignsData
+              {Math.round(campaigns
                 .filter(c => c.openRate !== null)
                 .reduce((acc, curr) => acc + (curr.openRate || 0), 0) / 
-                campaignsData.filter(c => c.openRate !== null).length)}%
+                campaigns.filter(c => c.openRate !== null).length || 0)}%
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Industry avg: 21.5%
@@ -240,113 +276,139 @@ const MarketingPage = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCampaigns.map((campaign) => (
-              <Card key={campaign.id} className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center space-x-2">
-                      {getTypeIcon(campaign.type)}
-                      <div>
-                        <CardTitle className="text-base">{campaign.name}</CardTitle>
-                        <CardDescription className="text-xs">{campaign.id}</CardDescription>
-                      </div>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Send className="mr-2 h-4 w-4" />
-                          Send Now
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Calendar className="mr-2 h-4 w-4" />
-                          Reschedule
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400">
-                          Delete Campaign
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                      {getStatusBadge(campaign.status)}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Type</span>
-                      <span className="text-sm">{campaign.type}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Audience</span>
-                      <span className="text-sm">{campaign.audience}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Recipients</span>
-                      <span className="text-sm">{campaign.recipients.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {campaign.status === "Scheduled" ? "Scheduled For" : "Sent On"}
-                      </span>
-                      <div className="flex items-center">
-                        {campaign.scheduledDate === "Automated" ? (
-                          <Badge variant="outline" className="text-blue-700 border-blue-300 dark:text-blue-400 dark:border-blue-900/50">
-                            Automated
-                          </Badge>
-                        ) : (
-                          <span className="text-sm flex items-center">
-                            {campaign.scheduledDate !== "Not scheduled" && (
-                              <>
-                                <Clock className="mr-1 h-3 w-3 text-gray-400" />
-                                {campaign.scheduledDate}
-                              </>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {campaign.openRate !== null && (
-                      <div className="pt-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Open Rate</span>
-                          <span className="text-sm font-medium">{campaign.openRate}%</span>
-                        </div>
-                        <Progress value={campaign.openRate} className="h-2" />
-                      </div>
-                    )}
-                    
-                    {campaign.clickRate !== null && (
-                      <div className="pt-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Click Rate</span>
-                          <span className="text-sm font-medium">{campaign.clickRate}%</span>
-                        </div>
-                        <Progress value={campaign.clickRate} className="h-2" />
-                      </div>
-                    )}
-                  </div>
+            {isLoading ? (
+              <Card className="col-span-full">
+                <CardContent className="flex items-center justify-center py-8">
+                  Loading campaigns...
                 </CardContent>
-                <CardFooter className="flex justify-between p-4 border-t bg-gray-50 dark:bg-gray-800/50">
-                  <Button variant="outline" size="sm">View Details</Button>
-                  <Button 
-                    className="bg-shopink-500 hover:bg-shopink-600" 
-                    size="sm"
-                    disabled={campaign.status === "Completed"}
-                  >
-                    {campaign.status === "Draft" ? "Edit" : campaign.status === "Scheduled" ? "Reschedule" : "Duplicate"}
-                  </Button>
-                </CardFooter>
               </Card>
-            ))}
+            ) : filteredCampaigns.length === 0 ? (
+              <Card className="col-span-full">
+                <CardContent className="flex flex-col items-center justify-center py-8">
+                  <p className="mb-4 text-gray-500">No campaigns found matching your search criteria.</p>
+                  <CreateCampaignDialog onCampaignCreated={fetchData} />
+                </CardContent>
+              </Card>
+            ) : (
+              filteredCampaigns.map((campaign) => (
+                <Card key={campaign.id} className="overflow-hidden">
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center space-x-2">
+                        {getTypeIcon(campaign.type)}
+                        <div>
+                          <CardTitle className="text-base">{campaign.name}</CardTitle>
+                          <CardDescription className="text-xs">{campaign.id}</CardDescription>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => handleSendNow(campaign.id)}
+                            disabled={campaign.status === "Completed" || campaign.status === "Active"}
+                            className="cursor-pointer"
+                          >
+                            <Send className="mr-2 h-4 w-4" />
+                            Send Now
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => openRescheduleDialog(campaign.id)}
+                            disabled={campaign.status === "Completed" || campaign.status === "Active"}
+                            className="cursor-pointer"
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            Reschedule
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteCampaign(campaign.id)}
+                            className="cursor-pointer text-red-500 focus:text-red-500 dark:focus:text-red-400"
+                          >
+                            Delete Campaign
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
+                        {getStatusBadge(campaign.status)}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Type</span>
+                        <span className="text-sm">{campaign.type}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Audience</span>
+                        <span className="text-sm">{campaign.audience}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Recipients</span>
+                        <span className="text-sm">{campaign.recipients.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {campaign.status === "Scheduled" ? "Scheduled For" : "Sent On"}
+                        </span>
+                        <div className="flex items-center">
+                          {campaign.scheduledDate === "Automated" ? (
+                            <Badge variant="outline" className="text-blue-700 border-blue-300 dark:text-blue-400 dark:border-blue-900/50">
+                              Automated
+                            </Badge>
+                          ) : (
+                            <span className="text-sm flex items-center">
+                              {campaign.scheduledDate !== "Not scheduled" && (
+                                <>
+                                  <Clock className="mr-1 h-3 w-3 text-gray-400" />
+                                  {campaign.scheduledDate}
+                                </>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {campaign.openRate !== null && (
+                        <div className="pt-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">Open Rate</span>
+                            <span className="text-sm font-medium">{campaign.openRate}%</span>
+                          </div>
+                          <Progress value={campaign.openRate} className="h-2" />
+                        </div>
+                      )}
+                      
+                      {campaign.clickRate !== null && (
+                        <div className="pt-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">Click Rate</span>
+                            <span className="text-sm font-medium">{campaign.clickRate}%</span>
+                          </div>
+                          <Progress value={campaign.clickRate} className="h-2" />
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex justify-between p-4 border-t bg-gray-50 dark:bg-gray-800/50">
+                    <Button variant="outline" size="sm">View Details</Button>
+                    <Button 
+                      className="bg-shopink-500 hover:bg-shopink-600" 
+                      size="sm"
+                      disabled={campaign.status === "Completed"}
+                    >
+                      {campaign.status === "Draft" ? "Edit" : campaign.status === "Scheduled" ? "Reschedule" : "Duplicate"}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
         
@@ -488,52 +550,47 @@ const MarketingPage = () => {
               </CardContent>
             </Card>
           </div>
-          
-          <div className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Marketing Resources</CardTitle>
-                <CardDescription>
-                  Tools and guides to help you create effective marketing campaigns
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <div className="flex items-center">
-                      <div className="mr-4 p-2 bg-shopink-100 dark:bg-shopink-900/50 rounded-full text-shopink-500">
-                        <Mail className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Email Marketing Guide</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Best practices for effective email campaigns</p>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" className="text-shopink-500">
-                      View <ArrowRight className="ml-1 h-3 w-3" />
-                    </Button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <div className="flex items-center">
-                      <div className="mr-4 p-2 bg-shopink-100 dark:bg-shopink-900/50 rounded-full text-shopink-500">
-                        <BellRing className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Push Notification Tips</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">How to boost engagement with push notifications</p>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" className="text-shopink-500">
-                      View <ArrowRight className="ml-1 h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
       </Tabs>
+      
+      {/* Reschedule Dialog */}
+      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Reschedule Campaign</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-2">
+              <label htmlFor="schedule-date" className="text-sm font-medium">
+                New Schedule Date
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  id="schedule-date"
+                  type="date"
+                  className="pl-10"
+                  value={newScheduleDate}
+                  onChange={(e) => setNewScheduleDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-shopink-500 hover:bg-shopink-600"
+              onClick={handleReschedule}
+              disabled={!newScheduleDate}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

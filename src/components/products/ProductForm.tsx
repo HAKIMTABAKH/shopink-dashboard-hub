@@ -1,18 +1,8 @@
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -20,155 +10,195 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DialogFooter } from "@/components/ui/dialog";
-import { Product } from "@/components/products/ProductCard";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
-// Schema for form validation
-const productSchema = z.object({
-  name: z.string().min(3, { message: "Product name must be at least 3 characters" }),
-  category: z.string().min(1, { message: "Please select a category" }),
-  price: z.coerce.number().positive({ message: "Price must be positive" }),
-  stock: z.coerce.number().nonnegative({ message: "Stock must be 0 or positive" }),
-  description: z.string().optional(),
-  image: z.string().url({ message: "Please enter a valid URL" }),
-});
-
-export type ProductFormValues = z.infer<typeof productSchema>;
-
-interface ProductFormProps {
-  onSubmit: (data: ProductFormValues) => void;
-  onCancel: () => void;
-  defaultValues?: Partial<ProductFormValues>;
-  isEditing?: boolean;
+// Define Product type to fix the error
+interface Product {
+  id?: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  stock: number;
+  image?: string;
+  status?: string;
 }
 
-const ProductForm = ({ 
-  onSubmit, 
-  onCancel, 
-  defaultValues = {
-    name: "",
-    category: "",
-    price: 0,
-    stock: 0,
-    description: "",
-    image: "",
-  },
-  isEditing = false
-}: ProductFormProps) => {
-  const form = useForm<ProductFormValues>({
-    resolver: zodResolver(productSchema),
-    defaultValues,
-  });
+const ProductForm = ({ product }: { product?: Product }) => {
+  const [name, setName] = useState(product?.name || "");
+  const [description, setDescription] = useState(product?.description || "");
+  const [price, setPrice] = useState(product?.price?.toString() || "");
+  const [category, setCategory] = useState(product?.category || "");
+  const [stock, setStock] = useState(product?.stock?.toString() || "");
+  const [image, setImage] = useState(product?.image || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Calculate status based on stock level
+      const stockNum = parseInt(stock);
+      let status = "In Stock";
+      if (stockNum <= 0) {
+        status = "Out of Stock";
+      } else if (stockNum <= 10) {
+        status = "Low Stock";
+      }
+
+      const productData = {
+        name,
+        description,
+        price: parseFloat(price),
+        category,
+        stock: stockNum,
+        image,
+        status,
+        updated_at: new Date(),
+      };
+
+      let result;
+      if (product?.id) {
+        // Update existing product
+        result = await supabase
+          .from("products")
+          .update(productData)
+          .eq("id", product.id);
+      } else {
+        // Create new product
+        result = await supabase
+          .from("products")
+          .insert([{ ...productData, created_at: new Date() }]);
+      }
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      toast({
+        title: product?.id ? "Product Updated" : "Product Created",
+        description: `Successfully ${product?.id ? "updated" : "created"} ${name}`,
+      });
+
+      navigate("/products");
+    } catch (error) {
+      console.error("Error saving product:", error);
+      toast({
+        title: "Error",
+        description: `Failed to ${product?.id ? "update" : "create"} product. Please try again.`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Product Name</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter product name" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="category"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Category</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="Footwear">Footwear</SelectItem>
-                    <SelectItem value="Apparel">Apparel</SelectItem>
-                    <SelectItem value="Electronics">Electronics</SelectItem>
-                    <SelectItem value="Accessories">Accessories</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="price"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Price</FormLabel>
-                <FormControl>
-                  <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="name">Product Name</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="category">Category</Label>
+            <Select
+              value={category}
+              onValueChange={setCategory}
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Footwear">Footwear</SelectItem>
+                <SelectItem value="Apparel">Apparel</SelectItem>
+                <SelectItem value="Electronics">Electronics</SelectItem>
+                <SelectItem value="Accessories">Accessories</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="price">Price ($)</Label>
+            <Input
+              id="price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="stock">Stock</Label>
+            <Input
+              id="stock"
+              type="number"
+              min="0"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+              required
+            />
+          </div>
         </div>
-        
-        <FormField
-          control={form.control}
-          name="stock"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Stock Quantity</FormLabel>
-              <FormControl>
-                <Input type="number" min="0" step="1" placeholder="0" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="image"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Image URL</FormLabel>
-              <FormControl>
-                <Input placeholder="https://..." {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Product description..." {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="submit" className="bg-shopink-500 hover:bg-shopink-600">
-            {isEditing ? "Update Product" : "Add Product"}
-          </Button>
-        </DialogFooter>
-      </form>
-    </Form>
+
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="h-32"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="image">Image URL</Label>
+            <Input
+              id="image"
+              value={image}
+              onChange={(e) => setImage(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button 
+          variant="outline" 
+          type="button"
+          onClick={() => navigate("/products")}
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          className="bg-shopink-500 hover:bg-shopink-600"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Saving..." : (product?.id ? "Update Product" : "Create Product")}
+        </Button>
+      </div>
+    </form>
   );
 };
 

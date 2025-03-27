@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Filter, PlusCircle, AlertTriangle, ArrowDownUp, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useProducts } from "@/contexts/ProductContext";
+import { supabase } from "@/integrations/supabase/client";
+import { formatInventoryItems, updateProductStock, InventoryItem } from "@/services/inventory";
 
 const InventoryPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,9 +45,49 @@ const InventoryPage = () => {
   const [isRestockDialogOpen, setIsRestockDialogOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [restockQuantity, setRestockQuantity] = useState(0);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0,
+  });
   
-  const { products, updateProduct } = useProducts();
   const { toast } = useToast();
+  
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+  
+  const fetchInventory = async () => {
+    setIsLoading(true);
+    try {
+      const { data: products, error } = await supabase
+        .from("products")
+        .select("*");
+        
+      if (error) throw error;
+      
+      const formattedItems = formatInventoryItems(products);
+      setInventoryItems(formattedItems);
+      
+      // Calculate inventory statistics
+      setStats({
+        totalProducts: products.length,
+        lowStockItems: products.filter(p => p.status === "Low Stock").length,
+        outOfStockItems: products.filter(p => p.status === "Out of Stock").length,
+      });
+    } catch (error) {
+      console.error("Error fetching inventory:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load inventory data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const getStockStatusBadge = (status: string) => {
     switch (status) {
@@ -83,51 +124,33 @@ const InventoryPage = () => {
     );
   };
 
-  const calculateStockStatus = (stock: number, reorderLevel: number): "In Stock" | "Low Stock" | "Out of Stock" => {
-    if (stock === 0) return "Out of Stock";
-    if (stock <= reorderLevel) return "Low Stock";
-    return "In Stock";
-  };
-
-  const handleRestock = () => {
+  const handleRestock = async () => {
     if (!selectedProductId || restockQuantity <= 0) return;
     
-    const product = products.find(p => p.id === selectedProductId);
-    if (!product) return;
-    
-    const newStock = product.stock + restockQuantity;
-    const newStatus = calculateStockStatus(newStock, 10); // Using 10 as a default reorder level
-    
-    updateProduct({
-      ...product,
-      stock: newStock,
-      status: newStatus
-    });
-    
-    toast({
-      title: "Inventory Updated",
-      description: `Added ${restockQuantity} units to ${product.name}. New stock: ${newStock}`,
-    });
-    
-    setIsRestockDialogOpen(false);
-    setRestockQuantity(0);
-    setSelectedProductId(null);
+    try {
+      const { newStock, newStatus } = await updateProductStock(selectedProductId, restockQuantity);
+      
+      toast({
+        title: "Inventory Updated",
+        description: `Added ${restockQuantity} units. New stock: ${newStock} units.`,
+      });
+      
+      // Refresh inventory data
+      fetchInventory();
+      
+      // Reset form
+      setIsRestockDialogOpen(false);
+      setRestockQuantity(0);
+      setSelectedProductId(null);
+    } catch (error) {
+      console.error("Error restocking:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update inventory. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
-
-  // Convert products to inventory items
-  const inventoryItems = products.map(product => ({
-    id: product.id,
-    name: product.name,
-    sku: `SKU-${product.id}`,
-    category: product.category,
-    stock: product.stock,
-    stockStatus: product.status,
-    reorderLevel: 10, // Default reorder level
-    supplier: product.category === "Footwear" ? "Nike, Inc." 
-            : product.category === "Apparel" ? "H&M Group"
-            : "Apple Inc.",
-    lastRestocked: "Jun 05, 2023",
-  }));
 
   // Filter and sort inventory items
   let filteredItems = inventoryItems.filter(item => {
@@ -162,20 +185,54 @@ const InventoryPage = () => {
   const inventoryStats = [
     {
       title: "Total Products",
-      value: products.length.toString(),
+      value: stats.totalProducts.toString(),
       icon: <ArrowDownUp className="h-6 w-6 text-shopink-500" />,
     },
     {
       title: "Low Stock Items",
-      value: products.filter(p => p.status === "Low Stock").length.toString(),
+      value: stats.lowStockItems.toString(),
       icon: <AlertTriangle className="h-6 w-6 text-yellow-500" />,
     },
     {
       title: "Out of Stock",
-      value: products.filter(p => p.status === "Out of Stock").length.toString(),
+      value: stats.outOfStockItems.toString(),
       icon: <AlertTriangle className="h-6 w-6 text-red-500" />,
     },
   ];
+  
+  const handleExport = () => {
+    // Generate CSV content
+    const headers = ["Product", "SKU", "Category", "Stock", "Status", "Supplier"];
+    const csvContent = [
+      headers.join(","),
+      ...filteredItems.map(item => 
+        [
+          item.name,
+          item.sku,
+          item.category,
+          item.stock,
+          item.stockStatus,
+          item.supplier
+        ].join(",")
+      )
+    ].join("\n");
+    
+    // Create download link
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `inventory-${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Export Successful",
+      description: "Inventory data has been exported to CSV.",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -252,12 +309,16 @@ const InventoryPage = () => {
             </SelectContent>
           </Select>
           
-          <Button className="bg-shopink-500 hover:bg-shopink-600">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Update Stock
-          </Button>
+          <Dialog open={isRestockDialogOpen} onOpenChange={setIsRestockDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-shopink-500 hover:bg-shopink-600">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Update Stock
+              </Button>
+            </DialogTrigger>
+          </Dialog>
           
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -280,37 +341,47 @@ const InventoryPage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredItems.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="font-medium">{item.name}</TableCell>
-                <TableCell className="font-mono text-xs">{item.sku}</TableCell>
-                <TableCell>{item.category}</TableCell>
-                <TableCell>
-                  <div className="w-36">
-                    {getStockProgress(item.stock, item.reorderLevel)}
-                  </div>
-                </TableCell>
-                <TableCell>{getStockStatusBadge(item.stockStatus)}</TableCell>
-                <TableCell>{item.supplier}</TableCell>
-                <TableCell>{item.lastRestocked}</TableCell>
-                <TableCell>
-                  <Button 
-                    size="sm" 
-                    className={
-                      item.stockStatus === "Out of Stock" || item.stockStatus === "Low Stock"
-                        ? "bg-shopink-500 hover:bg-shopink-600"
-                        : "bg-gray-500 hover:bg-gray-600"
-                    }
-                    onClick={() => {
-                      setSelectedProductId(item.id);
-                      setIsRestockDialogOpen(true);
-                    }}
-                  >
-                    Restock
-                  </Button>
-                </TableCell>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8">Loading inventory data...</TableCell>
               </TableRow>
-            ))}
+            ) : filteredItems.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8">No inventory items found matching your filters.</TableCell>
+              </TableRow>
+            ) : (
+              filteredItems.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">{item.name}</TableCell>
+                  <TableCell className="font-mono text-xs">{item.sku}</TableCell>
+                  <TableCell>{item.category}</TableCell>
+                  <TableCell>
+                    <div className="w-36">
+                      {getStockProgress(item.stock, item.reorderLevel)}
+                    </div>
+                  </TableCell>
+                  <TableCell>{getStockStatusBadge(item.stockStatus)}</TableCell>
+                  <TableCell>{item.supplier}</TableCell>
+                  <TableCell>{item.lastRestocked}</TableCell>
+                  <TableCell>
+                    <Button 
+                      size="sm" 
+                      className={
+                        item.stockStatus === "Out of Stock" || item.stockStatus === "Low Stock"
+                          ? "bg-shopink-500 hover:bg-shopink-600"
+                          : "bg-gray-500 hover:bg-gray-600"
+                      }
+                      onClick={() => {
+                        setSelectedProductId(item.id);
+                        setIsRestockDialogOpen(true);
+                      }}
+                    >
+                      Restock
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

@@ -1,49 +1,35 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, BarChart3, PieChart, Download, Filter, ArrowRight, TrendingUp, TrendingDown, Layers } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RPieChart, Pie, Cell } from "recharts";
-
-// Sample data for sales report
-const salesData = [
-  { name: "Jan", sales: 4000, orders: 240 },
-  { name: "Feb", sales: 3000, orders: 198 },
-  { name: "Mar", sales: 5000, orders: 280 },
-  { name: "Apr", sales: 2780, orders: 190 },
-  { name: "May", sales: 1890, orders: 150 },
-  { name: "Jun", sales: 6390, orders: 310 },
-  { name: "Jul", sales: 3490, orders: 220 },
-];
-
-// Sample data for product category breakdown
-const categoryData = [
-  { name: "Footwear", value: 45 },
-  { name: "Apparel", value: 30 },
-  { name: "Electronics", value: 15 },
-  { name: "Accessories", value: 10 },
-];
-
-// Sample data for customer acquisition
-const customerData = [
-  { name: "Jan", new: 500, returning: 300 },
-  { name: "Feb", new: 450, returning: 290 },
-  { name: "Mar", new: 600, returning: 400 },
-  { name: "Apr", new: 550, returning: 380 },
-  { name: "May", new: 700, returning: 480 },
-  { name: "Jun", new: 650, returning: 520 },
-  { name: "Jul", new: 800, returning: 600 },
-];
-
-// Sample data for top-selling products
-const topProducts = [
-  { name: "Nike Air Max 270", sales: 234, revenue: 34999.66 },
-  { name: "Adidas Ultraboost 22", sales: 187, revenue: 29999.73 },
-  { name: "Apple iPhone 14 Pro", sales: 156, revenue: 155844.44 },
-  { name: "Levi's 501 Original Fit Jeans", sales: 132, revenue: 11879.68 },
-  { name: "Samsung Galaxy S23", sales: 120, revenue: 107999.8 },
-];
+import {
+  fetchSalesData,
+  fetchCategoryData,
+  fetchCustomerData,
+  fetchTopProducts,
+  exportReportData,
+  SalesData,
+  CategoryData,
+  CustomerData,
+  TopProduct
+} from "@/services/reports";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
@@ -85,6 +71,52 @@ const statsOverview = [
 
 const ReportsPage = () => {
   const [dateRange, setDateRange] = useState("last-30-days");
+  const [salesData, setSalesData] = useState<SalesData[]>([]);
+  const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
+  const [customerData, setCustomerData] = useState<CustomerData[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const { toast } = useToast();
+  
+  useEffect(() => {
+    fetchReportData();
+  }, []);
+  
+  const fetchReportData = async () => {
+    setIsLoading(true);
+    try {
+      const [sales, categories, customers, products] = await Promise.all([
+        fetchSalesData(),
+        fetchCategoryData(),
+        fetchCustomerData(),
+        fetchTopProducts()
+      ]);
+      
+      setSalesData(sales);
+      setCategoryData(categories);
+      setCustomerData(customers);
+      setTopProducts(products);
+    } catch (error) {
+      console.error("Error fetching report data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load report data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleExport = (data: any[], filename: string) => {
+    exportReportData(data, filename, 'csv');
+    
+    toast({
+      title: "Export Successful",
+      description: `The ${filename} report has been exported to CSV.`,
+    });
+  };
   
   return (
     <div className="space-y-6">
@@ -105,10 +137,25 @@ const ReportsPage = () => {
             Filters
           </Button>
           
-          <Button className="bg-shopink-500 hover:bg-shopink-600">
-            <Download className="mr-2 h-4 w-4" />
-            Export Reports
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="bg-shopink-500 hover:bg-shopink-600">
+                <Download className="mr-2 h-4 w-4" />
+                Export Reports
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => handleExport(salesData, 'sales-report')}>
+                Sales Report
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport(topProducts, 'product-performance')}>
+                Product Performance
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport(customerData, 'customer-acquisition')}>
+                Customer Acquisition
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       
@@ -151,83 +198,109 @@ const ReportsPage = () => {
                   <CardDescription>Monthly sales and orders overview</CardDescription>
                 </div>
                 <div className="mt-3 md:mt-0">
-                  <select 
-                    className="rounded-md border border-gray-300 dark:border-gray-700 py-1.5 px-3 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-shopink-500"
+                  <Select 
                     value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value)}
+                    onValueChange={setDateRange}
                   >
-                    <option value="last-7-days">Last 7 Days</option>
-                    <option value="last-30-days">Last 30 Days</option>
-                    <option value="last-90-days">Last 90 Days</option>
-                    <option value="last-year">Last Year</option>
-                  </select>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select time period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="last-7-days">Last 7 Days</SelectItem>
+                      <SelectItem value="last-30-days">Last 30 Days</SelectItem>
+                      <SelectItem value="last-90-days">Last 90 Days</SelectItem>
+                      <SelectItem value="last-year">Last Year</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={salesData}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Area 
-                      type="monotone" 
-                      dataKey="sales" 
-                      stackId="1"
-                      stroke="#8884d8" 
-                      fill="#8884d8" 
-                      name="Sales ($)"
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="orders" 
-                      stackId="2"
-                      stroke="#82ca9d" 
-                      fill="#82ca9d" 
-                      name="Orders"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+              {isLoading ? (
+                <div className="h-80 flex items-center justify-center">
+                  Loading sales data...
+                </div>
+              ) : (
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={salesData}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Area 
+                        type="monotone" 
+                        dataKey="sales" 
+                        stackId="1"
+                        stroke="#8884d8" 
+                        fill="#8884d8" 
+                        name="Sales ($)"
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="orders" 
+                        stackId="2"
+                        stroke="#82ca9d" 
+                        fill="#82ca9d" 
+                        name="Orders"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </CardContent>
           </Card>
           
           {/* Top Products Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Top Selling Products</CardTitle>
-              <CardDescription>Best performing products by sales</CardDescription>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Top Selling Products</CardTitle>
+                  <CardDescription>Best performing products by sales</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleExport(topProducts, 'top-products')}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left pb-3">Product</th>
-                      <th className="text-right pb-3">Units Sold</th>
-                      <th className="text-right pb-3">Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topProducts.map((product, index) => (
-                      <tr 
-                        key={index} 
-                        className="border-b last:border-b-0 dark:border-gray-800"
-                      >
-                        <td className="py-3">{product.name}</td>
-                        <td className="py-3 text-right">{product.sales}</td>
-                        <td className="py-3 text-right">${product.revenue.toFixed(2)}</td>
+              {isLoading ? (
+                <div className="py-8 text-center">Loading product data...</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left pb-3">Product</th>
+                        <th className="text-right pb-3">Units Sold</th>
+                        <th className="text-right pb-3">Revenue</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {topProducts.map((product, index) => (
+                        <tr 
+                          key={index} 
+                          className="border-b last:border-b-0 dark:border-gray-800"
+                        >
+                          <td className="py-3">{product.name}</td>
+                          <td className="py-3 text-right">{product.sales}</td>
+                          <td className="py-3 text-right">${product.revenue.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <div className="mt-4">
                 <Button 
                   variant="ghost" 
@@ -245,56 +318,92 @@ const ReportsPage = () => {
             {/* Category Breakdown */}
             <Card>
               <CardHeader>
-                <CardTitle>Sales by Category</CardTitle>
-                <CardDescription>Product category distribution</CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Sales by Category</CardTitle>
+                    <CardDescription>Product category distribution</CardDescription>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleExport(categoryData, 'category-breakdown')}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RPieChart>
-                      <Pie
-                        data={categoryData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {categoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </RPieChart>
-                  </ResponsiveContainer>
-                </div>
+                {isLoading ? (
+                  <div className="h-64 flex items-center justify-center">
+                    Loading category data...
+                  </div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RPieChart>
+                        <Pie
+                          data={categoryData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {categoryData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </RPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
             
             {/* Product Performance */}
             <Card>
               <CardHeader>
-                <CardTitle>Product Performance</CardTitle>
-                <CardDescription>Top products by revenue</CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Product Performance</CardTitle>
+                    <CardDescription>Top products by revenue</CardDescription>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleExport(topProducts, 'product-revenue')}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={topProducts.map(p => ({ name: p.name.split(' ').slice(0, 2).join(' '), revenue: p.revenue / 1000 }))}
-                      margin={{ top: 10, right: 10, left: 10, bottom: 40 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" angle={-45} textAnchor="end" height={60} />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`$${value}k`, 'Revenue']} />
-                      <Bar dataKey="revenue" fill="#8884d8" name="Revenue (thousands)" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {isLoading ? (
+                  <div className="h-64 flex items-center justify-center">
+                    Loading product performance data...
+                  </div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={topProducts.map(p => ({ name: p.name.split(' ').slice(0, 2).join(' '), revenue: p.revenue / 1000 }))}
+                        margin={{ top: 10, right: 10, left: 10, bottom: 40 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={60} />
+                        <YAxis />
+                        <Tooltip formatter={(value) => [`$${value}k`, 'Revenue']} />
+                        <Bar dataKey="revenue" fill="#8884d8" name="Revenue (thousands)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -304,26 +413,44 @@ const ReportsPage = () => {
           {/* Customer Acquisition */}
           <Card>
             <CardHeader>
-              <CardTitle>Customer Acquisition</CardTitle>
-              <CardDescription>New vs. returning customers</CardDescription>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Customer Acquisition</CardTitle>
+                  <CardDescription>New vs. returning customers</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleExport(customerData, 'customer-acquisition')}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={customerData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="new" stackId="a" fill="#8884d8" name="New Customers" />
-                    <Bar dataKey="returning" stackId="a" fill="#82ca9d" name="Returning Customers" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {isLoading ? (
+                <div className="h-80 flex items-center justify-center">
+                  Loading customer data...
+                </div>
+              ) : (
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={customerData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="new" stackId="a" fill="#8884d8" name="New Customers" />
+                      <Bar dataKey="returning" stackId="a" fill="#82ca9d" name="Returning Customers" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </CardContent>
           </Card>
           
