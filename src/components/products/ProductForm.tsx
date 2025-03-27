@@ -61,7 +61,7 @@ const ProductForm = ({ product }: { product?: Product }) => {
         stock: stockNum,
         image,
         status,
-        updated_at: new Date(),
+        updated_at: new Date().toISOString(), // Convert Date to string
       };
 
       let result;
@@ -75,7 +75,10 @@ const ProductForm = ({ product }: { product?: Product }) => {
         // Create new product
         result = await supabase
           .from("products")
-          .insert([{ ...productData, created_at: new Date() }]);
+          .insert([{ 
+            ...productData, 
+            created_at: new Date().toISOString()  // Convert Date to string
+          }]);
       }
 
       if (result.error) {
