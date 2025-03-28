@@ -116,7 +116,7 @@ const OrdersPage = () => {
       }, async (payload) => {
         console.log('Order change received:', payload);
         
-        if (payload.new) {
+        if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
           const { data, error } = await supabase
             .from("orders")
             .select(`
