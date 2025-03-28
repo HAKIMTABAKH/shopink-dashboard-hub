@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { 
   Dialog, 
@@ -18,7 +17,9 @@ import {
   Truck, 
   ClipboardList, 
   AlertCircle,
-  MessageSquare 
+  MessageSquare,
+  CheckCircle,
+  Eye
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
@@ -59,14 +60,12 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
   const [customerDetails, setCustomerDetails] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [orderNotes, setOrderNotes] = useState<string>("");
-  
+
   useEffect(() => {
     if (open && order) {
-      // Fetch order items and customer details
       const fetchOrderDetails = async () => {
         setIsLoading(true);
         try {
-          // Fetch order items with product info
           const { data: items, error: itemsError } = await supabase
             .from('order_items')
             .select(`
@@ -80,7 +79,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
             
           if (itemsError) throw itemsError;
           
-          // Transform items data
           const transformedItems = items.map(item => ({
             id: item.id,
             product_name: item.products?.name || 'Unknown Product',
@@ -91,7 +89,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
           
           setOrderItems(transformedItems);
           
-          // Fetch customer details if customer_id exists
           if (order.customer_id) {
             const { data: customer, error: customerError } = await supabase
               .from('customers')
@@ -115,7 +112,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
     }
   }, [open, order]);
 
-  // Get status badge with appropriate styling
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Delivered":
@@ -133,7 +129,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
     }
   };
   
-  // Get payment badge with appropriate styling
   const getPaymentBadge = (payment: string) => {
     switch (payment) {
       case "Paid":
@@ -147,7 +142,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
     }
   };
   
-  // Get priority badge with appropriate styling
   const getPriorityBadge = (priority: "high" | "medium" | "low" | undefined) => {
     if (!priority) return null;
     
@@ -161,7 +155,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
     }
   };
 
-  // Add order notes
   const addOrderNote = () => {
     if (orderNotes.trim()) {
       toast.success("Order note added successfully");
@@ -201,7 +194,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
               <TabsTrigger value="notes">Notes & History</TabsTrigger>
             </TabsList>
             
-            {/* Order Details Tab */}
             <TabsContent value="details" className="space-y-4 py-4">
               <h3 className="text-lg font-medium mb-2 flex items-center">
                 <Package className="mr-2 h-5 w-5 text-gray-500" />
@@ -286,7 +278,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
               </div>
             </TabsContent>
             
-            {/* Customer Tab */}
             <TabsContent value="customer" className="space-y-4 py-4">
               {customerDetails ? (
                 <div className="space-y-6">
@@ -368,7 +359,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
               )}
             </TabsContent>
             
-            {/* Shipping Tab */}
             <TabsContent value="shipping" className="space-y-4 py-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium mb-2 flex items-center">
@@ -496,7 +486,6 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }: OrderDetailsDialogPro
               </Card>
             </TabsContent>
             
-            {/* Notes & History Tab */}
             <TabsContent value="notes" className="space-y-4 py-4">
               <div className="flex flex-col gap-4">
                 <h3 className="text-lg font-medium mb-2 flex items-center">

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { 
   Search, Filter, ChevronDown, Eye, Truck, Clock, CheckCircle, XCircle, AlertTriangle, MoreHorizontal
@@ -40,7 +39,6 @@ import { supabase } from "@/integrations/supabase/client";
 import OrderAssignmentDialog from "@/components/orders/OrderAssignmentDialog";
 import OrderDetailsDialog from "@/components/orders/OrderDetailsDialog";
 
-// Order type definition
 interface Order {
   id: string;
   order_number: string;
@@ -64,7 +62,6 @@ const OrdersPage = () => {
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
 
-  // Fetch orders from Supabase
   useEffect(() => {
     const fetchOrders = async () => {
       setIsLoading(true);
@@ -86,9 +83,8 @@ const OrdersPage = () => {
         
         if (error) throw error;
         
-        // Transform the data to match our Order interface
         const transformedOrders = data.map(order => ({
-          id: order.id,
+          id: order.id || '',
           order_number: order.order_number,
           customer: order.customers?.name || 'Unknown',
           date: new Date(order.created_at).toLocaleDateString(),
@@ -111,7 +107,6 @@ const OrdersPage = () => {
 
     fetchOrders();
 
-    // Setup realtime subscription for new/updated orders
     const ordersSubscription = supabase
       .channel('public:orders')
       .on('postgres_changes', { 
@@ -121,7 +116,6 @@ const OrdersPage = () => {
       }, async (payload) => {
         console.log('Order change received:', payload);
         
-        // Fetch the complete order with customer info
         if (payload.new) {
           const { data, error } = await supabase
             .from("orders")
@@ -153,7 +147,6 @@ const OrdersPage = () => {
               customer_id: data.customer_id
             };
             
-            // Handle insert/update
             if (payload.eventType === 'INSERT') {
               setOrders(prev => [updatedOrder, ...prev]);
               toast.success(`New order received: ${data.order_number}`);
@@ -166,7 +159,6 @@ const OrdersPage = () => {
           }
         }
         
-        // Handle delete
         if (payload.eventType === 'DELETE' && payload.old) {
           setOrders(prev => prev.filter(order => order.id !== payload.old.id));
           toast.info(`Order ${payload.old.order_number} has been deleted`);
@@ -179,14 +171,12 @@ const OrdersPage = () => {
     };
   }, []);
 
-  // Determine priority based on order total
   const getPriorityFromTotal = (total: number): "high" | "medium" | "low" => {
     if (total >= 500) return "high";
     if (total >= 200) return "medium";
     return "low";
   };
 
-  // Filter orders based on search query and status filter
   const filteredOrders = orders.filter(order => {
     const matchesSearch = 
       order.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -207,7 +197,6 @@ const OrdersPage = () => {
     return matchesSearch && matchesStatus && matchesTab;
   });
 
-  // Update order status
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       const { error } = await supabase
@@ -223,8 +212,7 @@ const OrdersPage = () => {
       toast.error("Failed to update order status");
     }
   };
-  
-  // Get status badge with appropriate styling
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Delivered":
@@ -241,8 +229,7 @@ const OrdersPage = () => {
         return <Badge>{status}</Badge>;
     }
   };
-  
-  // Get payment badge with appropriate styling
+
   const getPaymentBadge = (payment: string) => {
     switch (payment) {
       case "Paid":
@@ -255,8 +242,7 @@ const OrdersPage = () => {
         return <Badge variant="outline">{payment}</Badge>;
     }
   };
-  
-  // Get priority badge
+
   const getPriorityBadge = (priority: "high" | "medium" | "low" | undefined) => {
     if (!priority) return null;
     
@@ -269,8 +255,7 @@ const OrdersPage = () => {
         return <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">Low</Badge>;
     }
   };
-  
-  // Get action button based on order status
+
   const getActionButton = (order: Order) => {
     switch (order.status) {
       case "Pending":
@@ -339,7 +324,6 @@ const OrdersPage = () => {
     }
   };
 
-  // Get order counts by status for the tabs
   const getOrderCounts = () => {
     const counts = {
       all: orders.length,
@@ -356,7 +340,6 @@ const OrdersPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Order tabs */}
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full border-b dark:border-gray-700 grid grid-cols-6 bg-transparent">
           <TabsTrigger value="all" className="data-[state=active]:border-b-2 border-shopink-500 data-[state=active]:text-shopink-500 rounded-none">
@@ -379,7 +362,6 @@ const OrdersPage = () => {
           </TabsTrigger>
         </TabsList>
         
-        {/* Order content for all tabs */}
         <TabsContent value="all" className="pt-4">
           <OrdersContent 
             isLoading={isLoading}
@@ -483,7 +465,6 @@ const OrdersPage = () => {
         </TabsContent>
       </Tabs>
       
-      {/* Order details dialog */}
       {selectedOrder && (
         <OrderDetailsDialog 
           order={selectedOrder}
@@ -492,7 +473,6 @@ const OrdersPage = () => {
         />
       )}
       
-      {/* Order assignment dialog */}
       {selectedOrder && (
         <OrderAssignmentDialog
           order={selectedOrder}
@@ -504,7 +484,6 @@ const OrdersPage = () => {
   );
 };
 
-// Separate component for the orders content to avoid code duplication
 interface OrdersContentProps {
   isLoading: boolean;
   searchQuery: string;
