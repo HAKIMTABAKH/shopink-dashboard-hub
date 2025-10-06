@@ -7,12 +7,10 @@ import {
   ShoppingCart,
   Users,
   CreditCard,
-  Tag,
   Percent,
   Settings,
   Menu,
   X,
-  LogOut,
   PieChart,
   PackageOpen,
   BellRing,
@@ -20,8 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
 
 interface SidebarItemProps {
   icon: React.ElementType;
@@ -54,8 +50,6 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
-  const { signOut, user } = useAuth();
-  const { toast } = useToast();
 
   const sidebarItems = [
     {
@@ -125,23 +119,6 @@ const Sidebar = () => {
     closeSidebar();
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      toast({
-        title: "Logged out successfully",
-        description: "You have been logged out of your account",
-      });
-      navigate("/auth");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to log out. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   return (
     <>
       {/* Mobile Menu Button */}
@@ -186,7 +163,7 @@ const Sidebar = () => {
         </div>
 
         {/* Sidebar Content */}
-        <div className="py-6 px-3 overflow-y-auto h-[calc(100%-64px-64px)]">
+        <div className="py-6 px-3 overflow-y-auto h-[calc(100%-64px)]">
           {sidebarItems.map((item) => (
             <SidebarItem
               key={item.path}
@@ -197,20 +174,6 @@ const Sidebar = () => {
               onClick={() => navigateTo(item.path)}
             />
           ))}
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 p-4">
-          {user && (
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start text-gray-600 hover:text-red-500 hover:bg-red-50 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-              onClick={handleLogout}
-            >
-              <LogOut className="mr-3 h-5 w-5" />
-              Log Out
-            </Button>
-          )}
         </div>
       </div>
     </>
