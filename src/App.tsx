@@ -21,7 +21,6 @@ import { ProductProvider } from "./contexts/ProductContext";
 import { CustomerProvider } from "./contexts/CustomerContext";
 import { DiscountProvider } from "./contexts/DiscountContext";
 import { AuthProvider } from "./contexts/AuthContext";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -36,15 +35,7 @@ const App = () => (
               <Sonner />
               <BrowserRouter>
                 <Routes>
-                  <Route path="/auth" element={<AuthPage />} />
-                  <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <DashboardLayout />
-                      </ProtectedRoute>
-                    }
-                  >
+                  <Route path="/" element={<DashboardLayout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="products" element={<ProductsPage />} />
                     <Route path="orders" element={<OrdersPage />} />
