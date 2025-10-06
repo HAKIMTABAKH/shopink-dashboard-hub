@@ -41,10 +41,6 @@ const Header = () => {
     navigate("/auth");
   };
 
-  if (!user) {
-    return null;
-  }
-
   const getInitials = () => {
     if (!user) return "U";
     const email = user.email || "";

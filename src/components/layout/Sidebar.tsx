@@ -142,11 +142,6 @@ const Sidebar = () => {
     }
   };
 
-  // If no user is logged in, don't render the sidebar
-  if (!user) {
-    return null;
-  }
-
   return (
     <>
       {/* Mobile Menu Button */}
@@ -206,14 +201,16 @@ const Sidebar = () => {
 
         {/* Sidebar Footer */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 p-4">
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start text-gray-600 hover:text-red-500 hover:bg-red-50 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-            onClick={handleLogout}
-          >
-            <LogOut className="mr-3 h-5 w-5" />
-            Log Out
-          </Button>
+          {user && (
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start text-gray-600 hover:text-red-500 hover:bg-red-50 dark:text-gray-300 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-3 h-5 w-5" />
+              Log Out
+            </Button>
+          )}
         </div>
       </div>
     </>

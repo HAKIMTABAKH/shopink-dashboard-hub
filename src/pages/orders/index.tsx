@@ -73,7 +73,7 @@ const OrdersPage = () => {
             order_number, 
             status, 
             payment_status, 
-            total, 
+            total_amount, 
             items_count,
             created_at,
             customer_id,
@@ -91,8 +91,8 @@ const OrdersPage = () => {
           status: order.status,
           payment: order.payment_status,
           items: order.items_count || 0,
-          total: order.total,
-          priority: getPriorityFromTotal(order.total),
+          total: order.total_amount,
+          priority: getPriorityFromTotal(order.total_amount),
           customer_id: order.customer_id
         }));
         
@@ -124,7 +124,7 @@ const OrdersPage = () => {
               order_number, 
               status, 
               payment_status, 
-              total, 
+              total_amount, 
               items_count,
               created_at,
               customer_id,
@@ -142,8 +142,8 @@ const OrdersPage = () => {
               status: data.status,
               payment: data.payment_status,
               items: data.items_count || 0,
-              total: data.total,
-              priority: getPriorityFromTotal(data.total),
+              total: data.total_amount,
+              priority: getPriorityFromTotal(data.total_amount),
               customer_id: data.customer_id
             };
             

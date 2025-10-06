@@ -36,13 +36,13 @@ const Dashboard = () => {
         // Fetch total sales
         const { data: salesData, error: salesError } = await supabase
           .from("orders")
-          .select("total")
+          .select("total_amount")
           .eq("payment_status", "Paid");
           
         if (salesError) throw salesError;
         
         // Calculate total sales
-        const totalSales = salesData.reduce((sum, order) => sum + order.total, 0);
+        const totalSales = salesData.reduce((sum, order) => sum + order.total_amount, 0);
         
         // Fetch order count
         const { count: orderCount, error: orderError } = await supabase
@@ -74,7 +74,7 @@ const Dashboard = () => {
             order_number, 
             status, 
             payment_status, 
-            total, 
+            total_amount, 
             items_count,
             created_at,
             customer_id,
@@ -95,7 +95,7 @@ const Dashboard = () => {
           status: order.status,
           payment: order.payment_status,
           items: order.items_count || 0,
-          total: order.total
+          total: order.total_amount
         }));
         
         setRecentOrders(formattedOrders);
@@ -138,7 +138,7 @@ const Dashboard = () => {
               order_number, 
               status, 
               payment_status, 
-              total, 
+              total_amount, 
               items_count,
               created_at,
               customer_id,
@@ -156,7 +156,7 @@ const Dashboard = () => {
               status: data.status,
               payment: data.payment_status,
               items: data.items_count || 0,
-              total: data.total
+              total: data.total_amount
             };
             
             // Add to recent orders if it's pending
